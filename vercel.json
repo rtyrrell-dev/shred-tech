@@ -1,5 +1,8 @@
 {
   "framework": null,
   "buildCommand": null,
-  "outputDirectory": null
+  "outputDirectory": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/main" }
+  ]
 }
