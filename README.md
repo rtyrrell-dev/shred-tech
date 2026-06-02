@@ -8,7 +8,7 @@ A professional guitar setup assistant built with Google ADK (Python) + Gemini 2.
 
 SHRED TECH is a conversational AI agent that helps guitarists get their instruments playing perfectly. It covers:
 
-- **Full setup walkthroughs** — step-by-step for Strat/Tele (Path A) and Gibson/TOM (Path B) style guitars
+- **Full setup walkthroughs** — step-by-step for Strat/Tele style guitars (Path A: adjustable saddles) and Gibson/Les Paul style guitars (Path B: Tune-O-Matic bridge)
 - **Mechanical diagnostics** — fret buzz, tuning instability, intonation issues, dead notes
 - **Electronics diagnostics** — hum, crackling, dead signal, noisy pots and switches
 - **String recommendations** — gauge suggestions by tuning, scale length, and playing style
@@ -159,7 +159,7 @@ The agent routes guitars to one of two setup sequences based on bridge type:
 | Path | Bridge types | Step order |
 |------|-------------|------------|
 | **A** | Strat, Tele, hardtail, non-Floyd trem | Pre-Setup → Truss Rod → **Action → Radius** → Nut → Intonation → Pickup Height |
-| **B** | Tune-O-Matic, Gibson, Epiphone | Pre-Setup → Truss Rod → **Radius → Action** → Nut → Intonation → Pickup Height |
+| **B** | Tune-O-Matic bridge (Gibson, Les Paul, Epiphone) | Pre-Setup → Truss Rod → **Radius → Action** → Nut → Intonation → Pickup Height |
 
 Action and Radius are swapped between paths — this is intentional and matters. Floyd Rose, Bigsby, and acoustic are flagged as special cases.
 
