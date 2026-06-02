@@ -2,12 +2,6 @@
   "version": 2,
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
-  "functions": {
-    "api/main.py": {
-      "maxDuration": 30,
-      "memory": 1024
-    }
-  },
   "rewrites": [
     { "source": "/health", "destination": "/api/main" },
     { "source": "/api/:path*", "destination": "/api/main" },
