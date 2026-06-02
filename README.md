@@ -18,7 +18,7 @@ SHRED TECH is a conversational AI agent that helps guitarists get their instrume
 
 ## Prerequisites
 
-- Python 3.11 or higher
+- Python 3.12
 - Node 18 or higher
 - A free Gemini API key from [Google AI Studio](https://aistudio.google.com)
 
@@ -31,7 +31,7 @@ SHRED TECH is a conversational AI agent that helps guitarists get their instrume
 3. Click **Create API key** → **Create API key in new project**
 4. Copy the key that appears
 
-> **Important:** Use model `gemini-2.5-flash`. Some other Gemini model versions (including `gemini-2.0-flash` and `gemini-2.0-flash-lite`) have their free tier disabled and will return quota errors even with a valid key. The model is already set correctly in `agent/agent.py` — just make sure you don't change it.
+> **Important:** Use model `gemini-2.5-flash`. Other Gemini model versions (including `gemini-2.0-flash` and `gemini-2.0-flash-lite`) have their free tier disabled and will return quota errors even with a valid key. The model is already set correctly in `agent/agent.py` — don't change it.
 
 > **Note on key format:** Google AI Studio now issues API keys starting with `AQ.` instead of the legacy `AIzaSy...` format. Both formats work — just copy whatever key AI Studio gives you.
 
@@ -140,10 +140,12 @@ shred-tech/
 │   │   ├── main.tsx
 │   │   └── index.css      # Dark industrial styles with amber accents
 │   ├── index.html
+│   ├── vercel.json        # Vercel config for the frontend project
 │   ├── vite.config.ts
 │   └── package.json
+├── .python-version        # Pins Python 3.12 for Vercel deployment
 ├── requirements.txt
-├── vercel.json
+├── vercel.json            # Vercel config for the backend project
 ├── .env.example
 └── README.md
 ```
@@ -181,52 +183,53 @@ Action and Radius are swapped between paths — this is intentional and matters.
 
 ## Deploying to Vercel
 
-### Step 1 — Push to GitHub
+This project uses **two separate Vercel projects** from the same GitHub repo — one for the frontend, one for the backend API. Both live on the same Vercel account.
 
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin <your-github-repo-url>
-git push -u origin main
-```
+### Step 1 — Deploy the backend (shred-tech-api)
 
-### Step 2 — Import to Vercel
+1. Go to [vercel.com/new](https://vercel.com/new) → import your GitHub repo
+2. **Before deploying**, configure Build & Development Settings:
+   - **Framework Preset:** `Other`
+   - **Root Directory:** *(leave blank)*
+   - **Build Command:** *(leave blank)*
+   - **Output Directory:** *(leave blank)*
+3. Add environment variable: `GEMINI_API_KEY` = your key
+4. Name the project `shred-tech-api` → **Deploy**
 
-1. Go to [vercel.com](https://vercel.com) and sign in
-2. Click **Add New Project** → import your GitHub repo
-3. Vercel will detect the `vercel.json` configuration automatically
+Vercel auto-detects `api/main.py` as a Python serverless function. Once deployed, verify it's working by visiting `https://shred-tech-api.vercel.app/health` — should return `{"status":"ok","agent":"shred_tech"}`.
 
-### Step 3 — Add the environment variable
+### Step 2 — Deploy the frontend (shred-tech)
 
-In your Vercel project: **Settings → Environment Variables**
+1. Go to [vercel.com/new](https://vercel.com/new) → import the same GitHub repo again
+2. Set **Root Directory** to `frontend`
+3. Framework will auto-detect as Vite
+4. Add environment variable: `VITE_API_URL` = `https://shred-tech-api.vercel.app`
+5. Name the project `shred-tech` → **Deploy**
 
-Add:
-```
-GEMINI_API_KEY = your_key_here
-```
+> **Important:** `VITE_API_URL` is baked in at build time by Vite. If you change it, you must redeploy the frontend for the change to take effect.
 
-### Step 4 — Deploy
+### Redeployment
 
-Click **Deploy**. Vercel builds the React frontend as a static site and serves the FastAPI backend as a serverless function. The `vercel.json` routes `/api/*` to the Python backend and everything else to the frontend.
-
-> **Note on the Vercel secret:** `vercel.json` references `@gemini_api_key` for the env var. You can either add the variable directly in the Vercel dashboard (recommended) or create a Vercel secret with that name using the Vercel CLI: `vercel secrets add gemini_api_key your_key_here`.
+Both projects auto-redeploy when you push to `main`. If you update the backend URL, remember to redeploy the frontend manually after updating the env var.
 
 ---
 
 ## Troubleshooting
 
 **`limit: 0` quota error**
-This means the model you're using doesn't have a free tier. Make sure the model in `agent/agent.py` is set to `gemini-2.5-flash`. Do not change it to `gemini-2.0-flash-lite` or `gemini-2.0-flash`.
+The model doesn't have a free tier enabled. Make sure `agent/agent.py` uses `gemini-2.5-flash`. Do not change it to `gemini-2.0-flash-lite` or `gemini-2.0-flash`.
 
 **`API key not valid` error**
 The key in `.env` is a placeholder or malformed. Open `.env` and paste the key directly from AI Studio.
 
 **`adk web` doesn't show the shred_tech agent**
-Make sure you're running `adk web` from the project root (the `shred-tech/` directory) with the virtual environment activated.
+Run `adk web` from the project root (the `shred-tech/` directory) with the virtual environment activated. Select **agent** from the dropdown — not "api" or "frontend".
 
-**Frontend shows connection error**
+**Frontend shows "Connection error" in production**
+Check that `VITE_API_URL` is set correctly in the frontend Vercel project and that the frontend was redeployed after the variable was added. Verify the backend is live at `https://your-api-url/health`.
+
+**Frontend shows "Connection error" locally**
 The backend isn't running. Start `uvicorn api.main:app --reload` in a separate terminal first.
 
 **Port conflict**
-If port 8000 is in use: `uvicorn api.main:app --reload --port 8001`, then update the proxy in `frontend/vite.config.ts` to match.
+If port 8000 is in use: `uvicorn api.main:app --reload --port 8001`, then update the proxy target in `frontend/vite.config.ts` to match.
