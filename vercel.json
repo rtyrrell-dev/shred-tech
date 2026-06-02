@@ -16,6 +16,7 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/main.py" },
     { "src": "/health", "dest": "/api/main.py" },
-    { "src": "/(.*)", "dest": "/$1" }
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
