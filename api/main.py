@@ -159,3 +159,8 @@ async def chat(request: ChatRequest):
         response_text = "I didn't get a response. Please try again."
 
     return ChatResponse(response=response_text, session_id=session_id)
+
+
+# Vercel serverless handler
+from mangum import Mangum
+handler = Mangum(app)
