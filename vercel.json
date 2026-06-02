@@ -1,33 +1,16 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/main.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb"
-      }
-    },
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "frontend/dist"
-      }
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "functions": {
+    "api/main.py": {
+      "maxDuration": 30,
+      "memory": 1024
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/health",
-      "dest": "api/main.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "frontend/dist/$1"
-    }
+  },
+  "rewrites": [
+    { "source": "/health", "destination": "/api/main" },
+    { "source": "/api/:path*", "destination": "/api/main" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
