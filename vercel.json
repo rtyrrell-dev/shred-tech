@@ -4,7 +4,6 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     { "source": "/health", "destination": "/api/main" },
-    { "source": "/api/:path*", "destination": "/api/main" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/:path*", "destination": "/api/main" }
   ]
 }
