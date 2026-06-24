@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import time
+import uuid
 from collections import defaultdict
 from datetime import datetime
 
@@ -58,9 +59,10 @@ async def run_case(case: dict) -> dict:
     expected = case["expected_specialist"]
     category = case["category"]
 
+    eval_session_id = f"eval-{uuid.uuid4()}"
     try:
         response_text, actual_specialist = await run_query(
-            message=query, user_id="eval"
+            message=query, user_id="eval", session_id=eval_session_id
         )
     except Exception as e:
         err = str(e)[:120]

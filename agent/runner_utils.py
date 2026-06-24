@@ -7,6 +7,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
 
 from agent.agent import root_agent
+from agent.logging_utils import TurnLogger
 
 APP_NAME = "shred_tech"
 
@@ -31,10 +32,7 @@ async def run_query(
         (response_text, agent_author) where agent_author is the name of the
         agent that produced the final substantive response.
 
-    In a multi-agent transfer flow the coordinator emits a brief handoff
-    message first, then the specialist produces the substantive response.
-    We collect all final-response events and return the last non-empty one
-    so the caller always gets the specialist's content, not the handoff text.
+    Every call is logged to logs/agentops.jsonl via TurnLogger.
     """
     session_id = session_id or str(uuid.uuid4())
 
@@ -60,6 +58,7 @@ async def run_query(
         parts=[genai_types.Part(text=message)],
     )
 
+    logger = TurnLogger(session_id=session_id, user_message=message)
     collected: list[tuple[str, str]] = []
 
     async for event in runner.run_async(
@@ -67,6 +66,8 @@ async def run_query(
         session_id=session_id,
         new_message=user_message,
     ):
+        logger.observe(event)  # read-only — never touches session state
+
         if event.is_final_response():
             author = getattr(event, "author", "unknown")
             if event.content and event.content.parts:
@@ -76,6 +77,8 @@ async def run_query(
                 )
                 if text.strip():
                     collected.append((text.strip(), author))
+
+    logger.flush()
 
     if collected:
         return collected[-1]
