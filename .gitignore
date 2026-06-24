@@ -32,3 +32,6 @@ Thumbs.db
 
 .vercel
 .env*.local
+
+# AgentOps logs (written locally, not committed)
+logs/
