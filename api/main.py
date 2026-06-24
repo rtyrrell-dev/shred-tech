@@ -132,6 +132,11 @@ async def chat(request: ChatRequest):
             app_name=APP_NAME,
             user_id=user_id,
             session_id=session_id,
+            state={
+                "guitar_model": None,
+                "bridge_type": None,
+                "symptoms_mentioned": [],
+            },
         )
 
     user_message = genai_types.Content(
