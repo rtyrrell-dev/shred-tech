@@ -214,6 +214,65 @@ Both projects auto-redeploy when you push to `main`. If you update the backend U
 
 ---
 
+## Evaluation
+
+SHRED TECH ships with a custom LLM-as-a-Judge eval harness built on top of the live agent.
+
+### Running the eval
+
+```bash
+# Full suite (18 cases, ~10 min on free tier)
+python -m eval.run_eval
+
+# Specific cases only
+python -m eval.run_eval --ids setup-02 trouble-elec-01 gear-01
+
+# Custom delay between cases (default 8s — manages free-tier RPM limits)
+python -m eval.run_eval --delay 15
+```
+
+### What the output looks like
+
+```
+SHRED TECH eval harness — 18 case(s), 8s delay between cases
+
+STATUS  ID                     ROUTING                          ACC  TONE  SAFE  REASONING
+------------------------------------------------------------------------
+[PASS] setup-02              SetupAgent                       | acc=5 tone=4 safety=5 | Accurate step-by-step Strat setup...
+[PASS] trouble-mech-01       TroubleshootingAgent             | acc=5 tone=5 safety=5 | Correctly identifies truss rod...
+[FAIL] ambiguous-01          SetupAgent != shred_tech         | acc=4 tone=4 safety=5 | Routed without clarifying question
+
+================================================================================
+AGGREGATE RESULTS
+  Total cases   : 18
+  Passed        : 15  (83.3%)
+  Routing acc.  : 88.9%
+  Avg accuracy  : 4.6/5
+  Avg tone      : 4.4/5
+  Avg safety    : 4.8/5
+```
+
+Full per-case scores and reasoning are saved to `eval/results/scorecard_<timestamp>.json`.
+
+### How it works
+
+The harness runs each test case through the live multi-agent pipeline (`root_agent` → coordinator → specialist) using the same `Runner`/session pattern as the API. Responses are then scored by a separate Gemini call acting as judge, with no shared context between the agent and the judge.
+
+Three scoring dimensions (1–5 each):
+- **Accuracy** — technical correctness of the guitar advice
+- **Tone** — calibration to the user's experience level, one question at a time
+- **Safety** — appropriate warnings before irreversible steps (nut filing, TOM saddle filing)
+
+A case passes if all three dimensions score > 2 AND the correct specialist handled the query.
+
+### Why a custom harness alongside ADK's built-in evaluators
+
+ADK ships with `rubric_based_final_response_quality_v1` and `safety_v1` as built-in evaluators. This custom harness complements them with domain-specific rubrics: guitar accuracy requires lutherie knowledge the generic quality rubric doesn't encode, and the safety dimension specifically flags missing warnings for guitar-destructive steps that `safety_v1` isn't calibrated for. The routing accuracy metric also doesn't exist in the built-in evaluators since it's specific to the multi-agent coordinator/specialist architecture.
+
+> **Note on free-tier quota:** `gemini-2.5-flash` has a 20 RPD daily limit on the free tier. Each eval case uses 2–3 API calls (coordinator + specialist + judge). Run the full 18-case suite on a fresh day, or use `--ids` to run a smaller subset within the daily budget.
+
+---
+
 ## Troubleshooting
 
 **`limit: 0` quota error**
