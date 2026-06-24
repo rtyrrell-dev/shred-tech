@@ -214,6 +214,58 @@ Both projects auto-redeploy when you push to `main`. If you update the backend U
 
 ---
 
+## AgentOps Logging
+
+Every request through the API and eval harness is appended to `logs/agentops.jsonl` (JSONL — one JSON object per line). The file is gitignored and written locally only.
+
+Each record captures:
+
+```json
+{
+  "timestamp": "2026-06-24T01:41:13Z",
+  "session_id": "abc123",
+  "invocation_id": "...",
+  "user_message": "my strat has a buzz on the low E",
+  "agents_involved": ["shred_tech", "TroubleshootingAgent"],
+  "transfers": [{"from_agent": "shred_tech", "to_agent": "TroubleshootingAgent"}],
+  "tool_calls": [{"agent": "TroubleshootingAgent", "tool": "diagnose_issue", "args": {"symptom": "buzzing"}}],
+  "tool_results": [{"tool": "diagnose_issue", "response_summary": "..."}],
+  "state_changes": [{"bridge_type": "strat", "symptoms_mentioned": ["buzzing"]}],
+  "latency_ms": 1340,
+  "final_response_preview": "first 200 chars..."
+}
+```
+
+Eval runs use `eval-<uuid>` session IDs so they're easy to filter out from production traffic.
+
+### Querying with jq
+
+```bash
+# Count turns handled by each specialist
+jq -r '.agents_involved[-1]' logs/agentops.jsonl | sort | uniq -c | sort -rn
+
+# List all transfer events (from → to)
+jq '[.transfers[]]' logs/agentops.jsonl
+
+# Average latency across all turns (ms)
+jq -s '[.[].latency_ms] | add/length' logs/agentops.jsonl
+
+# Average latency by final specialist
+jq -s 'group_by(.agents_involved[-1])[] | {agent: .[0].agents_involved[-1], avg_ms: ([.[].latency_ms] | add/length)}' logs/agentops.jsonl
+
+# Find slow turns (latency > 3000ms)
+jq 'select(.latency_ms > 3000)' logs/agentops.jsonl
+
+# Show all state changes (bridge_type, guitar_model, symptoms_mentioned)
+jq '.state_changes[]' logs/agentops.jsonl
+
+# Separate eval traffic from production traffic
+jq 'select(.session_id | startswith("eval-"))' logs/agentops.jsonl
+jq 'select(.session_id | startswith("eval-") | not)' logs/agentops.jsonl
+```
+
+---
+
 ## Evaluation
 
 SHRED TECH ships with a custom LLM-as-a-Judge eval harness built on top of the live agent.
