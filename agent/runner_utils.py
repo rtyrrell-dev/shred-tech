@@ -11,6 +11,7 @@ from google.genai import types as genai_types
 from agent.agent import root_agent
 from agent.logging_utils import TurnLogger
 from guards.abuse import GUARD_INSTRUCTION
+from guards.quota import MAX_CALLS_PER_TURN
 
 APP_NAME = "shred_tech"
 
@@ -20,9 +21,9 @@ INITIAL_STATE = {
     "symptoms_mentioned": [],
 }
 
-# Upper bound on model calls in one user turn (coordinator + specialist + each tool round).
-# A normal turn needs about 3-6; ADK's default of 500 would let a looping agent run up a bill.
-MAX_LLM_CALLS_PER_TURN = 10
+# Upper bound on model calls in one user turn. The value and how it was measured live in
+# guards/quota.py; ADK's default of 500 would let a looping agent exhaust the daily quota.
+MAX_LLM_CALLS_PER_TURN = MAX_CALLS_PER_TURN
 
 session_service = InMemorySessionService()
 # Scope/non-disclosure rules appended to every agent's prompt (the supported replacement for the

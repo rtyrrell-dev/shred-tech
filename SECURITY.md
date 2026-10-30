@@ -31,7 +31,7 @@ Each row is one thing an attacker might try, what the code does about it, and wh
 
 | Abuse case | Mitigation | Residual risk |
 |---|---|---|
-| **Burn the Gemini quota or bill** by scripting many requests | In code: 10 requests/min and 100/day per IP, a **global daily cap** (default 300, env `GLOBAL_DAILY_LIMIT`), 30 messages per session. Per model call: at most 4096 output tokens. Per user turn: at most 10 model calls. A 25 s timeout per request. | Many IPs (a botnet) can still use up the global cap, which stops the demo for the day. That is an availability problem, not unbounded spend. Spend limits at the API provider are configured outside this repository and are not enforced by this code. |
+| **Burn the Gemini quota or bill** by scripting many requests | In code: 10 requests/min and 100/day per IP, a **global daily cap** (default 300, env `GLOBAL_DAILY_LIMIT`), 30 messages per session. Per model call: at most 4096 output tokens. Per user turn: at most 4 model calls (the longest path measured). A 25 s timeout per request. | Many IPs (a botnet) can still use up the global cap, which stops the demo for the day. That is an availability problem, not unbounded spend. Spend limits at the API provider are configured outside this repository and are not enforced by this code. |
 | **Use the endpoint as a free general-purpose chatbot** | A shared instruction (added to every agent's prompt) tells the model to refuse non-guitar requests. Obvious jailbreak phrases are refused without calling the model. Messages are capped at 2000 characters and sessions at 30 messages. | The model can occasionally be talked into an off-topic answer. A prompt rule is guidance to the model, not a guarantee. The caps limit the damage. |
 | **Prompt injection / extracting the system prompt** | User text is declared untrusted in the shared instruction. A regex check refuses common extraction phrases without calling the model. A reply containing system-prompt section headers is replaced before it is returned. | A rephrased request may still coax out part of the prompt. The prompts contain no secrets (only guitar-setup rules and routing instructions), so the impact is low. |
 | **Misusing the agent's tools** | Tools are pure functions over built-in tables. A test checks that `agent/tools.py` imports nothing but ADK and calls none of `open`, `exec`, `eval`, `compile`, `__import__`, `input`, `system` or `popen`. | If a tool with side effects is ever added, this needs a fresh review. |
@@ -58,7 +58,7 @@ Each row is one thing an attacker might try, what the code does about it, and wh
 | Message length | 2000 characters | `api/main.py` |
 | Model call timeout | 25 seconds | `api/main.py` |
 | Output tokens per model call | 4096 | `agent/agent.py` |
-| Model calls per user turn | 10 | `agent/runner_utils.py` |
+| Model calls per user turn | 4 | `guards/quota.py` |
 
 ## How the rate limiter works
 
