@@ -22,6 +22,21 @@ Retries add none: with no retry options configured, google-genai uses a "never r
 # instead of an estimate. A turn that needs more than this fails with a generic error.
 MAX_CALLS_PER_TURN = 4
 
+# One IP may use at most about a third of the day's turns, so a single visitor or script cannot use
+# the whole demo up by itself.
+IP_SHARE_DENOMINATOR = 3
+
+
+def ip_daily_turn_limit(global_limit: int) -> int:
+    """Chat turns per day for a single IP: floor(global / 3), but at least 1.
+
+    With the default global limit of 4 this is 1 turn per IP per day (25% of the total). When the
+    global limit is 1 or 2, one turn is still allowed, which is more than a third; that is the
+    smallest limit that still lets anyone use the demo.
+    """
+    return max(1, global_limit // IP_SHARE_DENOMINATOR)
+
+
 # --- Daily quota -> turns --------------------------------------------------------------------
 
 import logging

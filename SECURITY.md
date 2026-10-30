@@ -31,7 +31,7 @@ Each row is one thing an attacker might try, what the code does about it, and wh
 
 | Abuse case | Mitigation | Residual risk |
 |---|---|---|
-| **Burn the Gemini quota or bill** by scripting many requests | In code: 10 requests/min and 100/day per IP, a **global daily cap** of chat turns derived from the Gemini free-tier request quota (see "Daily quota budget" below), 30 messages per session. Per model call: at most 4096 output tokens. Per user turn: at most 4 model calls (the longest path measured). A 25 s timeout per request. | Many IPs (a botnet) can still use up the global cap, which stops the demo for the day. That is an availability problem, not unbounded spend. Spend limits at the API provider are configured outside this repository and are not enforced by this code. |
+| **Burn the Gemini quota or bill** by scripting many requests | In code: 10 requests/min per IP and, per IP per day, a third of the global turn limit (1 turn with the default quota), a **global daily cap** of chat turns derived from the Gemini free-tier request quota (see "Daily quota budget" below), 30 messages per session. Per model call: at most 4096 output tokens. Per user turn: at most 4 model calls (the longest path measured). A 25 s timeout per request. | Many IPs (a botnet) can still use up the global cap, which stops the demo for the day. That is an availability problem, not unbounded spend. Spend limits at the API provider are configured outside this repository and are not enforced by this code. |
 | **Use the endpoint as a free general-purpose chatbot** | A shared instruction (added to every agent's prompt) tells the model to refuse non-guitar requests. Obvious jailbreak phrases are refused without calling the model. Messages are capped at 2000 characters and sessions at 30 messages. | The model can occasionally be talked into an off-topic answer. A prompt rule is guidance to the model, not a guarantee. The caps limit the damage. |
 | **Prompt injection / extracting the system prompt** | User text is declared untrusted in the shared instruction. A regex check refuses common extraction phrases without calling the model. A reply containing system-prompt section headers is replaced before it is returned. | A rephrased request may still coax out part of the prompt. The prompts contain no secrets (only guitar-setup rules and routing instructions), so the impact is low. |
 | **Misusing the agent's tools** | Tools are pure functions over built-in tables. A test checks that `agent/tools.py` imports nothing but ADK and calls none of `open`, `exec`, `eval`, `compile`, `__import__`, `input`, `system` or `popen`. | If a tool with side effects is ever added, this needs a fresh review. |
@@ -51,7 +51,7 @@ Each row is one thing an attacker might try, what the code does about it, and wh
 
 | Limit | Value | Where |
 |---|---|---|
-| Requests per IP | 10 per minute, 100 per day | `guards/ratelimit.py` |
+| Requests per IP | 10 per minute; per day, `floor(global limit / 3)`, at least 1 (1 with the default quota) | `guards/quota.py`, `guards/ratelimit.py` |
 | Chat turns per day, all users | `floor(quota x 0.8 / 4)`; 4 with the default quota of 20 (env `GEMINI_DAILY_QUOTA`, override `GLOBAL_DAILY_LIMIT`) | `guards/quota.py` |
 | Messages per session | 30 (session lasts 24 h) | `guards/ratelimit.py` |
 | Request body | 16 KiB | `guards/limits.py` |
