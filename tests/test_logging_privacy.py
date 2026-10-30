@@ -3,8 +3,6 @@ import pathlib
 import re
 from types import SimpleNamespace
 
-import pytest
-
 import agent.logging_utils as logging_utils
 from agent.logging_utils import TurnLogger
 

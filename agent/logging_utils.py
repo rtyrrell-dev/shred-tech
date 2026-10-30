@@ -159,5 +159,5 @@ class TurnLogger:
             os.makedirs(LOG_DIR, exist_ok=True)
             with open(LOG_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
-        except Exception:
+        except Exception:  # noqa: S110 - logging must never break the request path
             pass
