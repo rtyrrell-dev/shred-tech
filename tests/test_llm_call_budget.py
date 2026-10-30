@@ -122,3 +122,25 @@ def test_no_retries_are_configured_for_gemini_requests():
 
     assert Gemini().retry_options is None
     assert all(a.model == "gemini-2.5-flash" for a in [root_agent, *root_agent.sub_agents])
+
+
+async def test_follow_up_turns_in_one_session_skip_the_coordinator(scripted_model):
+    # Documented in the README and SECURITY.md: once a specialist has answered, the next message in
+    # the same session goes straight to it, so a follow-up costs 1-2 requests instead of 2-4.
+    requests = scripted_model(
+        [
+            transfer("SetupAgent"),                           # turn 1: coordinator routes ...
+            call("get_setup_flow", bridge_type="strat"),      # ... specialist uses a tool ...
+            say("Step 1: pre-setup."),                        # ... and answers (3 requests)
+            say("Step 2: truss rod."),                        # turn 2: specialist answers (1 request)
+            call("get_setup_flow", bridge_type="strat"),      # turn 3: specialist uses a tool ...
+            say("Here is the order."),                        # ... and answers (2 requests)
+        ]
+    )
+    sid = f"follow-up-{uuid.uuid4()}"
+    costs = []
+    for message in ("set up my strat", "done, what next?", "and the order again?"):
+        before = len(requests)
+        await runner_utils.run_query(message, session_id=sid)
+        costs.append(len(requests) - before)
+    assert costs == [3, 1, 2]
