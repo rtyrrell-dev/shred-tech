@@ -5,9 +5,15 @@ One JSON object per line is appended to logs/agentops.jsonl after every
 run_query call. Logging is purely observational — this module reads event
 data only and never writes to session state.
 
-Standard library only: json, os, time, datetime.
+Privacy: by default the log holds metadata only (message length and a short hash, agent and tool
+names, latency). User text, model text, tool arguments and state values are NOT written. Set
+LOG_USER_TEXT=1 to also record truncated message/reply text for local debugging. Tool arguments are
+never logged, in either mode, because they are derived from user input.
+
+Standard library only: hashlib, json, os, time, datetime.
 """
 
+import hashlib
 import json
 import os
 import time
@@ -19,7 +25,17 @@ LOG_DIR = os.path.join(_PROJECT_ROOT, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "agentops.jsonl")
 
 _RESPONSE_PREVIEW_CHARS = 200
-_TOOL_RESPONSE_MAX_CHARS = 500
+_USER_TEXT_MAX_CHARS = 200
+
+
+def _log_text_enabled() -> bool:
+    """Opt-in only. Read at write time so it can be toggled without re-importing."""
+    return os.environ.get("LOG_USER_TEXT", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _fingerprint(text: str) -> str:
+    """Short SHA-256 prefix: lets you spot repeated messages without storing them."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 def _truncate(text: str, max_chars: int) -> str:
@@ -51,6 +67,7 @@ class TurnLogger:
         self._tool_results: list[dict] = []
         self._state_changes: list[dict] = []
         self._final_response_preview: str = ""
+        self._final_response_chars: int = 0
         self._latency_ms: int = 0
 
     def observe(self, event) -> None:
@@ -73,26 +90,19 @@ class TurnLogger:
             fc = getattr(part, "function_call", None)
             if fc:
                 fc_name = getattr(fc, "name", "") or ""
-                fc_args = dict(getattr(fc, "args", {}) or {})
                 # transfer_to_agent is captured via actions below; skip here
                 if fc_name and fc_name != "transfer_to_agent":
-                    self._tool_calls.append({
-                        "agent": author,
-                        "tool": fc_name,
-                        "args": fc_args,
-                    })
+                    # Name only: arguments come from user input and are deliberately not logged.
+                    self._tool_calls.append({"agent": author, "tool": fc_name})
 
             fr = getattr(part, "function_response", None)
             if fr:
                 fr_name = getattr(fr, "name", "") or ""
                 fr_resp = getattr(fr, "response", {}) or {}
                 if fr_name:
-                    self._tool_results.append({
-                        "tool": fr_name,
-                        "response_summary": _truncate(
-                            str(fr_resp), _TOOL_RESPONSE_MAX_CHARS
-                        ),
-                    })
+                    self._tool_results.append(
+                        {"tool": fr_name, "response_chars": len(str(fr_resp))}
+                    )
 
         # ── Actions: transfers and state delta ───────────────────────────────
         actions = getattr(event, "actions", None)
@@ -107,7 +117,8 @@ class TurnLogger:
             state_delta = getattr(actions, "state_delta", None)
             if state_delta:
                 # state_delta is a dict of the keys that changed this event
-                self._state_changes.append(dict(state_delta))
+                # Keys only: values (guitar model, symptoms) are user-supplied.
+                self._state_changes.append({"keys": sorted(str(k) for k in state_delta)})
 
         # ── Final response: preview and latency ──────────────────────────────
         if event.is_final_response():
@@ -117,6 +128,7 @@ class TurnLogger:
                     p.text for p in parts if hasattr(p, "text") and p.text
                 )
                 if text:
+                    self._final_response_chars = len(text.strip())
                     self._final_response_preview = _truncate(
                         text.strip(), _RESPONSE_PREVIEW_CHARS
                     )
@@ -130,15 +142,19 @@ class TurnLogger:
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "session_id": self._session_id,
             "invocation_id": self._invocation_id or "unknown",
-            "user_message": self._user_message,
+            "user_message_chars": len(self._user_message),
+            "user_message_sha256_12": _fingerprint(self._user_message),
             "agents_involved": self._agents_seen,
             "transfers": self._transfers,
             "tool_calls": self._tool_calls,
             "tool_results": self._tool_results,
             "state_changes": self._state_changes,
             "latency_ms": self._latency_ms,
-            "final_response_preview": self._final_response_preview,
+            "final_response_chars": self._final_response_chars,
         }
+        if _log_text_enabled():
+            record["user_message"] = _truncate(self._user_message, _USER_TEXT_MAX_CHARS)
+            record["final_response_preview"] = self._final_response_preview
         try:
             os.makedirs(LOG_DIR, exist_ok=True)
             with open(LOG_FILE, "a", encoding="utf-8") as f:
