@@ -129,11 +129,17 @@ This starts a local UI in your browser. Select **agent** from the agent dropdown
 ```
 shred-tech/
 ├── agent/
-│   ├── agent.py          # ADK LlmAgent definition (root_agent)
+│   ├── agent.py          # Coordinator LlmAgent (root_agent)
+│   ├── specialists/      # SetupAgent, TroubleshootingAgent, GearRecommendationAgent
 │   ├── tools.py          # Four FunctionTools
-│   └── knowledge.py      # setup reference embedded as a string
+│   ├── knowledge.py      # Original setup reference embedded as a string
+│   ├── logging_utils.py  # AgentOps-style JSONL turn logger
+│   └── runner_utils.py   # Shared Runner/session helper (API + eval)
 ├── api/
 │   └── main.py           # FastAPI wrapper around the ADK runner
+├── eval/                 # LLM-as-a-Judge harness (run_eval.py, judge.py, test_set.py)
+├── tests/                # pytest unit tests for tools and setup reference
+├── .github/workflows/    # CI: runs pytest
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx        # Chat UI with welcome screen and message bubbles
@@ -153,6 +159,37 @@ shred-tech/
 ---
 
 ## How the Agent Works
+
+### Architecture
+
+SHRED TECH is a multi-agent system built on ADK's `sub_agents` transfer mechanism: one coordinator and three specialists.
+
+```
+                        ┌──────────────────────┐
+        user message ─▶ │ shred_tech           │  routes only; never answers guitar questions
+                        │ (coordinator)        │
+                        └──────────┬───────────┘
+              ┌────────────────────┼─────────────────────┐
+              ▼                    ▼                     ▼
+      ┌──────────────┐   ┌─────────────────────┐   ┌─────────────────────────┐
+      │ SetupAgent   │   │ TroubleshootingAgent│   │ GearRecommendationAgent │
+      └──────┬───────┘   └──────────┬──────────┘   └─────────────────────────┘
+             │                      │
+   get_setup_flow           diagnose_issue
+   get_string_recommendations   diagnose_electrical_issue
+```
+
+| Agent | File | Owns |
+|-------|------|------|
+| `shred_tech` (coordinator) | `agent/agent.py` | Routing, one-question disambiguation, off-topic and prompt-injection refusals |
+| `SetupAgent` | `agent/specialists/setup_agent.py` | Setup walkthroughs, string gauge/tuning; embeds the setup reference |
+| `TroubleshootingAgent` | `agent/specialists/troubleshooting_agent.py` | Mechanical and electrical diagnosis |
+| `GearRecommendationAgent` | `agent/specialists/gear_agent.py` | Upgrade and purchase advice |
+
+How a turn flows:
+1. The coordinator reads the message, writes a one-line handoff acknowledgment, and transfers to a specialist. If a first message is genuinely ambiguous (setup vs. something broken), it asks one clarifying question first.
+2. The specialist takes over for the rest of the conversation, reading and writing shared session state (`guitar_model`, `bridge_type`, `symptoms_mentioned`) so the user is never asked the same thing twice.
+3. Specialists call their own tools. Tools are plain Python functions returning structured dicts (lookup tables, not LLM calls), so they are unit tested.
 
 ### Setup paths
 
@@ -176,8 +213,25 @@ Action and Radius are swapped between paths — this is intentional and matters.
 
 ### Knowledge sources
 
-- **Setup reference** (embedded in system prompt): Primary reference for mechanical setup specs and step ordering
-- **Agent's own knowledge**: Used for electronics, Floyd Rose, acoustic setups, and anything not in the setup reference. The agent is instructed to say so when it's drawing on its own knowledge rather than the guide.
+- **Setup reference** (embedded in system prompt, original text): Primary reference for mechanical setup specs.
+- **Agent's own knowledge**: Used for electronics, Floyd Rose, acoustic setups, and anything not in the setup reference. The agent is instructed to say so when it's drawing on its own knowledge rather than the reference.
+
+### Acknowledgments
+
+The setup methodology in SHRED TECH was influenced by MusicNomad's guitar setup guide. SHRED TECH is an independent project and is not affiliated with, endorsed by, or sponsored by MusicNomad.
+
+---
+
+## Tests
+
+Unit tests cover the four tools and the setup reference. They need no API key or network access.
+
+```bash
+pip install pytest
+python -m pytest tests -v
+```
+
+GitHub Actions runs the same suite on every push to `main` and on pull requests (`.github/workflows/tests.yml`). The LLM-based eval harness is separate and is not run in CI.
 
 ---
 
@@ -271,7 +325,9 @@ Things to know:
 
 ---
 
-## AgentOps Logging
+## AgentOps-Style Logging
+
+> This is a small custom logger (`agent/logging_utils.py`, standard library only). It borrows the idea of agent observability but does **not** use the AgentOps platform or SDK.
 
 Every request through the API and eval harness is appended to `logs/agentops.jsonl` (JSONL — one JSON object per line). The file is gitignored and written locally only.
 
@@ -345,6 +401,8 @@ python -m eval.run_eval --delay 15
 ```
 
 ### What the output looks like
+
+> **Illustrative only.** The output and percentages below are a format example, not results from a recorded run. No scorecard has been committed yet; a real run writes `eval/results/scorecard_<timestamp>.json`.
 
 ```
 SHRED TECH eval harness — 18 case(s), 8s delay between cases
