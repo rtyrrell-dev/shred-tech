@@ -236,8 +236,24 @@ Summary of what protects the deployment:
 |----------|----------|---------|
 | `GEMINI_API_KEY` | Yes | Gemini API access |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Yes in production | Rate-limit store. Without them the API returns 503 (fail-closed). `KV_REST_API_URL`/`KV_REST_API_TOKEN` are also accepted. |
-| `GLOBAL_DAILY_LIMIT` | No (default 300) | Total chat requests per day across all users |
+| `GEMINI_DAILY_QUOTA` | No (default 20) | Your Gemini free-tier daily request quota. Chat turns per day are derived from it (see below) |
+| `GLOBAL_DAILY_LIMIT` | No (derived) | Overrides the derived total of chat turns per day across all users |
 | `LOG_USER_TEXT` | No (off) | Set to `1` to also log truncated message/reply text locally |
+
+### Free-tier limit
+
+The demo runs on a free Gemini key, so the limit that matters is the **daily request quota**, not
+money. By default the app assumes 20 requests per day (`GEMINI_DAILY_QUOTA`; set it to what AI Studio
+shows for your project). One chat turn can make up to 4 model requests (measured in
+`tests/test_llm_call_budget.py`, and enforced as a hard cap), so the app serves at most
+`floor(quota x 0.8 / 4)` turns per day across all visitors: **4 turns a day with the default**. One
+visitor (IP address) gets about a third of that, which is **1 turn a day** by default. The remaining
+20% leaves room for anything else using the same project quota, such as running the eval harness.
+
+When the budget is used up, the API answers with a friendly 503 explaining that the demo hit its daily
+free-tier quota. Google documents that daily request quotas reset at midnight Pacific time, and the
+app's daily counters reset at the same moment. A bigger quota means more turns: for example 100
+requests per day gives 20 turns a day and 6 per visitor.
 
 **Local development:** the API is production-strict by default. Add `SHRED_LOCAL_DEV=1` to your local `.env` (it is in `.env.example`) to use an in-memory limiter, allow the Vite dev server's origin and ignore proxy IP headers. **Never set `SHRED_LOCAL_DEV` in Vercel.**
 
