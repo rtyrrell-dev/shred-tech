@@ -214,27 +214,60 @@ Both projects auto-redeploy when you push to `main`. If you update the backend U
 
 ---
 
+## Security
+
+This is a public demo with no login, so it is hardened against abuse. Full threat model, current
+limits and accepted risks: **[SECURITY.md](SECURITY.md)**.
+
+Summary of what protects the deployment:
+
+- **Cost and abuse limits** — per-IP, per-session and global daily request caps in Upstash Redis
+  (fail-closed), body-size cap, 25 s model timeout, output-token and model-call ceilings.
+- **Scope and prompt-injection controls** — shared scope/non-disclosure instruction, regex
+  pre-check that skips the model for obvious attacks, system-prompt leak filter, read-only tools.
+- **Web hardening** — CORS limited to the real frontend, strict CSP and security headers,
+  model output rendered as plain text.
+- **Privacy** — logs hold metadata only; user text is opt-in. No secrets in the repo or bundle.
+- **Supply chain** — exact Python pins, `pip-audit`, `npm audit`, gitleaks and Dependabot in CI.
+
+### Backend environment variables (set in the Vercel backend project)
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `GEMINI_API_KEY` | Yes | Gemini API access |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Yes on Vercel | Rate-limit store. Without them the API returns 503 (fail-closed). `KV_REST_API_URL`/`KV_REST_API_TOKEN` are also accepted. |
+| `GLOBAL_DAILY_LIMIT` | No (default 300) | Total chat requests per day across all users |
+| `LOG_USER_TEXT` | No (off) | Set to `1` to also log truncated message/reply text locally |
+
+Locally, with no Upstash credentials, the API uses an in-memory limiter so development just works.
+
+---
+
 ## AgentOps Logging
 
 Every request through the API and eval harness is appended to `logs/agentops.jsonl` (JSONL — one JSON object per line). The file is gitignored and written locally only.
 
-Each record captures:
+Each record captures metadata only. Message text, tool arguments and state values are not written:
 
 ```json
 {
   "timestamp": "2026-06-24T01:41:13Z",
   "session_id": "abc123",
   "invocation_id": "...",
-  "user_message": "my strat has a buzz on the low E",
+  "user_message_chars": 34,
+  "user_message_sha256_12": "9f2c41ab07de",
   "agents_involved": ["shred_tech", "TroubleshootingAgent"],
   "transfers": [{"from_agent": "shred_tech", "to_agent": "TroubleshootingAgent"}],
-  "tool_calls": [{"agent": "TroubleshootingAgent", "tool": "diagnose_issue", "args": {"symptom": "buzzing"}}],
-  "tool_results": [{"tool": "diagnose_issue", "response_summary": "..."}],
-  "state_changes": [{"bridge_type": "strat", "symptoms_mentioned": ["buzzing"]}],
+  "tool_calls": [{"agent": "TroubleshootingAgent", "tool": "diagnose_issue"}],
+  "tool_results": [{"tool": "diagnose_issue", "response_chars": 812}],
+  "state_changes": [{"keys": ["bridge_type", "symptoms_mentioned"]}],
   "latency_ms": 1340,
-  "final_response_preview": "first 200 chars..."
+  "final_response_chars": 420
 }
 ```
+
+Set `LOG_USER_TEXT=1` to additionally record `user_message` and `final_response_preview`
+(truncated to 200 characters) for local debugging. Tool arguments are never logged.
 
 Eval runs use `eval-<uuid>` session IDs so they're easy to filter out from production traffic.
 
@@ -256,7 +289,7 @@ jq -s 'group_by(.agents_involved[-1])[] | {agent: .[0].agents_involved[-1], avg_
 # Find slow turns (latency > 3000ms)
 jq 'select(.latency_ms > 3000)' logs/agentops.jsonl
 
-# Show all state changes (bridge_type, guitar_model, symptoms_mentioned)
+# Show which state keys changed (bridge_type, guitar_model, symptoms_mentioned)
 jq '.state_changes[]' logs/agentops.jsonl
 
 # Separate eval traffic from production traffic
