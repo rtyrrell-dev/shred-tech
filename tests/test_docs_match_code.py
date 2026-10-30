@@ -12,9 +12,19 @@ def test_per_turn_cap_is_what_the_docs_say():
     assert MAX_CALLS_PER_TURN == 4
 
 
+REMOVED_SETTINGS = (
+    "GLOBAL_DAILY_LIMIT",
+    "GEMINI_DAILY_QUOTA",
+    "GEMINI_QUOTA_SAFETY",
+    "UPSTASH_",
+    "KV_REST_API",
+)
+
+
 def test_removed_settings_are_gone_from_the_docs():
     for name, text in DOCS.items():
-        assert "GLOBAL_DAILY_LIMIT" not in text, f"{name} still documents GLOBAL_DAILY_LIMIT"
+        for setting in REMOVED_SETTINGS:
+            assert setting not in text, f"{name} still documents {setting}"
     for name in ("README.md", "SECURITY.md"):
         assert "per IP per day" not in DOCS[name] and "per visitor" not in DOCS[name].lower().replace("per-visitor", "")
 

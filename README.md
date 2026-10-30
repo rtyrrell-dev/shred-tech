@@ -275,8 +275,10 @@ limits and accepted risks: **[SECURITY.md](SECURITY.md)**.
 
 Summary of what protects the deployment:
 
-- **Cost and abuse limits** — a per-IP burst limit, a per-session cap and one shared daily budget of Gemini requests, metered per request in Upstash Redis
-  (fail-closed), body-size cap, 25 s model timeout, output-token and model-call ceilings.
+- **Cost and abuse limits** — body-size cap, 25 s model timeout, output-token and model-call
+  ceilings, and the Gemini free tier's own daily quota as a hard cost ceiling. The app keeps no
+  counters and needs no database or Redis; per-client rate limiting is expected at the edge, outside
+  this repo.
 - **Scope and prompt-injection controls** — shared scope/non-disclosure instruction, regex
   pre-check that skips the model for obvious attacks, system-prompt leak filter, read-only tools.
 - **Web hardening** — CORS limited to the real frontend, strict CSP and security headers,
@@ -289,39 +291,36 @@ Summary of what protects the deployment:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `GEMINI_API_KEY` | Yes | Gemini API access |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Yes in production | Rate-limit store. Without them the API returns 503 (fail-closed). `KV_REST_API_URL`/`KV_REST_API_TOKEN` are also accepted. |
-| `GEMINI_DAILY_QUOTA` | No (default 20) | Your Gemini free-tier daily request quota (see Free-tier limit below) |
-| `GEMINI_QUOTA_SAFETY` | No (default 0.9) | Fraction of that quota the demo may spend. The shared daily budget is `floor(quota x safety)` Gemini requests |
 | `LOG_USER_TEXT` | No (off) | Set to `1` to also log truncated message/reply text locally |
 
 ### Free-tier limit
 
 The live demo runs on a free Gemini key, so the limit that matters is the **daily request quota**, not
-money. All visitors share **one daily budget of Gemini requests**: `GEMINI_DAILY_QUOTA` (default 20,
-set it to what AI Studio shows for your project) times `GEMINI_QUOTA_SAFETY` (default 0.9, because the
-demo is meant to have its own Google project), which is **18 requests a day** with the defaults.
+money. The app does not count requests: when Google's quota is spent, Gemini answers with a 429 and
+the API turns it into a friendly 503. If the error names a per-day quota, the message says the shared
+free-tier demo budget is used up for today and that it comes back after the daily reset at
+midnight Pacific time (with a matching `Retry-After`). Any other 429 gets a neutral "try again in a
+minute" message with no `Retry-After`.
 
 A chat turn costs the model requests it actually makes: 1 when the coordinator answers directly, 2 or
 3 when it routes to a specialist (3 with a tool lookup), at most 4 (a hard per-turn cap). A follow-up in
 the same conversation is usually 1 or 2. Messages blocked by the injection pre-check and invalid
-requests cost nothing. In practice 18 requests is roughly six first questions, or a few short
-conversations.
+requests cost nothing.
 
-**The live demo may be unavailable late in the day.** One visitor can use the whole shared budget, so
-the demo can run out before the day ends. It then answers with a friendly message saying the shared
-free-tier demo budget is used up for today. Google documents that daily request quotas reset at
-midnight Pacific time, and the app's counters reset at the same moment. A bigger quota means more
-requests: a quota of 100 gives 90.
+**The live demo may be unavailable late in the day.** One visitor can use the whole free-tier quota,
+so the demo can run out before the day ends.
 
 Things to know:
 
-- The budget is only enforced for traffic through the API. The eval harness (`python -m eval.run_eval`),
-  the adversarial script and local development use the same Google project quota without being counted,
-  so run them when the demo is idle.
+- The eval harness (`python -m eval.run_eval`), the adversarial script and local development use the
+  same Google project quota, so run them when the demo is idle.
 - Conversation state may reset between requests on the serverless host, so a follow-up can lose the
-  conversation context. The state is kept in memory on each instance.
+  conversation context. Session ids are issued by the server and checked against that instance's
+  in-memory session store, so each session lives on one instance only. If the next request lands on
+  another instance, the server quietly issues a new id and a fresh conversation; the chat UI picks it
+  up with no error.
 
-**Local development:** the API is production-strict by default. Add `SHRED_LOCAL_DEV=1` to your local `.env` (it is in `.env.example`) to use an in-memory limiter, allow the Vite dev server's origin and ignore proxy IP headers. **Never set `SHRED_LOCAL_DEV` in Vercel.**
+**Local development:** the API is production-strict by default. Add `SHRED_LOCAL_DEV=1` to your local `.env` (it is in `.env.example`) to allow the Vite dev server's origin in CORS. **Never set `SHRED_LOCAL_DEV` in Vercel.**
 
 ---
 
