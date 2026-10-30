@@ -3,6 +3,7 @@
 google-adk>=2.1.0
 mangum>=0.17.0
 google-genai>=1.75.0,<2.0.0
+upstash-redis>=1.8.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 python-dotenv>=1.0.0

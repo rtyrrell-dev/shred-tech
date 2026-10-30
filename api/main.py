@@ -1,13 +1,10 @@
 import asyncio
 import os
 import re
-import time
-import uuid
-from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
@@ -16,29 +13,23 @@ load_dotenv()
 from agent.runner_utils import runner, session_service, APP_NAME, INITIAL_STATE, run_query
 from guards.errors import classify_error, log_exception
 from guards.limits import BodySizeLimitMiddleware
+from guards.ratelimit import (
+    UNAVAILABLE_MESSAGE,
+    Guard,
+    GuardUnavailable,
+    LimitExceeded,
+    build_store_from_env,
+    client_ip,
+)
 
-# Rate limiting: max requests per window per session
-RATE_LIMIT_REQUESTS = 20
-RATE_LIMIT_WINDOW_SECONDS = 600  # 10 minutes
-_rate_limit_store: dict[str, deque] = defaultdict(deque)
+# Per-IP, global and per-session limits live in guards/ratelimit.py (Redis-backed, fail-closed).
+guard = Guard(store=build_store_from_env())
 
 MAX_MESSAGE_LENGTH = 2000
 
 # Hard ceiling on one model call (coordinator + specialist + tools). Without it, a slow or
 # hung provider call would hold a serverless invocation (and its bill) open.
 REQUEST_TIMEOUT_SECONDS = 25
-
-
-def check_rate_limit(session_id: str) -> bool:
-    now = time.time()
-    window_start = now - RATE_LIMIT_WINDOW_SECONDS
-    timestamps = _rate_limit_store[session_id]
-    while timestamps and timestamps[0] < window_start:
-        timestamps.popleft()
-    if len(timestamps) >= RATE_LIMIT_REQUESTS:
-        return False
-    timestamps.append(now)
-    return True
 
 
 def sanitize_input(text: str) -> str:
@@ -103,14 +94,18 @@ async def health():
 
 
 @app.post("/api/agent", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    session_id = request.session_id or str(uuid.uuid4())
-
-    if not check_rate_limit(session_id):
+async def chat(request: ChatRequest, http_request: Request):
+    ip = client_ip(http_request.headers, http_request.client.host if http_request.client else None)
+    try:
+        session_id = await guard.check_request(ip, request.session_id)
+    except LimitExceeded as limit:
         raise HTTPException(
-            status_code=429,
-            detail=f"Too many requests. Max {RATE_LIMIT_REQUESTS} messages per 10 minutes.",
+            status_code=limit.status_code,
+            detail=limit.message,
+            headers={"Retry-After": str(limit.retry_after)},
         )
+    except GuardUnavailable:
+        raise HTTPException(status_code=503, detail=UNAVAILABLE_MESSAGE, headers={"Retry-After": "30"})
 
     clean_message = sanitize_input(request.message)
 

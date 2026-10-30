@@ -18,7 +18,6 @@ def fast_model(monkeypatch):
         return "ok", "SetupAgent"
 
     monkeypatch.setattr(main, "run_query", ok)
-    main._rate_limit_store.clear()
 
 
 def test_normal_message_passes(client):
