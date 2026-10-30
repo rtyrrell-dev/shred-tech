@@ -4,5 +4,3 @@ pytest==9.2.0
 ruff==0.17.3
 pytest-asyncio==1.4.1
 pip-audit==2.10.1
-fakeredis==2.40.0
-lupa==2.8

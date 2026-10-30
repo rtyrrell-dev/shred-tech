@@ -73,7 +73,7 @@ export default function App() {
         }),
       });
 
-      // 413 too large, 429 rate limit / session cap, 503 quota or capacity, 504 timeout:
+      // 413 too large, 503 Gemini quota or rate limit, 504 timeout (429 kept as a safe fallback):
       // the server sends a friendly, safe message in `detail`. It is rendered as plain text.
       if ([413, 429, 503, 504].includes(res.status)) {
         const data = await res.json().catch(() => null);

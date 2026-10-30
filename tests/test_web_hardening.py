@@ -62,6 +62,12 @@ def test_localhost_only_allowed_in_explicit_local_dev(monkeypatch):
     assert "http://localhost:5173" in allowed_origins()
 
 
+def test_local_dev_flag_must_be_exactly_one(monkeypatch):
+    for value in ("0", "true", "yes", ""):
+        monkeypatch.setenv("SHRED_LOCAL_DEV", value)
+        assert allowed_origins() == [FRONTEND_ORIGIN]
+
+
 # --- Security headers in vercel.json ---------------------------------------
 
 @pytest.mark.parametrize("path", ["vercel.json", "frontend/vercel.json"])

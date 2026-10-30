@@ -3,7 +3,7 @@ import re
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
@@ -14,17 +14,6 @@ from guards.abuse import INJECTION_REPLY, filter_output, looks_like_injection
 from guards.cors import allowed_origins
 from guards.errors import classify_error, log_exception
 from guards.limits import BodySizeLimitMiddleware
-from guards.ratelimit import (
-    UNAVAILABLE_MESSAGE,
-    Guard,
-    GuardUnavailable,
-    LimitExceeded,
-    build_store_from_env,
-    client_ip,
-)
-
-# Per-IP, global and per-session limits live in guards/ratelimit.py (Redis-backed, fail-closed).
-guard = Guard(store=build_store_from_env())
 
 MAX_MESSAGE_LENGTH = 2000
 
@@ -97,23 +86,9 @@ async def health():
 
 
 @app.post("/api/agent", response_model=ChatResponse)
-async def chat(request: ChatRequest, http_request: Request):
-    ip = client_ip(http_request.headers, http_request.client.host if http_request.client else None)
+async def chat(request: ChatRequest):
     # Server-issued: an id this instance does not know is replaced, not rejected (see runner_utils).
     session_id = await resolve_session_id(request.session_id)
-    try:
-        await guard.check_request(ip, session_id)
-    except LimitExceeded as limit:
-        raise HTTPException(
-            status_code=limit.status_code,
-            detail=limit.message,
-            headers={"Retry-After": str(limit.retry_after)},
-        ) from None
-    except GuardUnavailable:
-        raise HTTPException(
-            status_code=503, detail=UNAVAILABLE_MESSAGE, headers={"Retry-After": "30"}
-        ) from None
-
     clean_message = sanitize_input(request.message)
 
     # Obvious prompt-injection / prompt-extraction attempts are answered without a model call, so a
