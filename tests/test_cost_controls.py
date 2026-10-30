@@ -38,7 +38,7 @@ def test_client_cannot_choose_the_model(monkeypatch):
         "/api/agent", json={"message": "hi", "model": "gemini-2.5-pro", "max_output_tokens": 99999}
     )
     assert res.status_code == 200
-    assert set(calls[0]) == {"message", "user_id", "session_id", "turn"}
+    assert set(calls[0]) == {"message", "user_id", "session_id"}
     assert "model" not in main.ChatRequest.model_fields
 
 

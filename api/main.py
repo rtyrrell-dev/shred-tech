@@ -11,10 +11,8 @@ load_dotenv()
 
 from agent.runner_utils import resolve_session_id, run_query, runner
 from guards.abuse import INJECTION_REPLY, filter_output, looks_like_injection
-from guards.budget import BudgetExhausted, TurnState
 from guards.cors import allowed_origins
 from guards.errors import classify_error, log_exception
-from guards.quota import DAILY_QUOTA_MESSAGE
 from guards.limits import BodySizeLimitMiddleware
 from guards.ratelimit import (
     UNAVAILABLE_MESSAGE,
@@ -98,18 +96,6 @@ async def health():
     return {"status": "ok", "agent": runner.agent.name}
 
 
-def _budget_spent(spent: BudgetExhausted) -> HTTPException:
-    return HTTPException(
-        status_code=503,
-        detail=DAILY_QUOTA_MESSAGE,
-        headers={"Retry-After": str(spent.retry_after)},
-    )
-
-
-def _unavailable() -> HTTPException:
-    return HTTPException(status_code=503, detail=UNAVAILABLE_MESSAGE, headers={"Retry-After": "30"})
-
-
 @app.post("/api/agent", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request):
     ip = client_ip(http_request.headers, http_request.client.host if http_request.client else None)
@@ -130,47 +116,25 @@ async def chat(request: ChatRequest, http_request: Request):
 
     clean_message = sanitize_input(request.message)
 
-    # Obvious prompt-injection / prompt-extraction attempts are answered without a model call. This
-    # runs before any budget accounting, so a blocked message costs the shared budget nothing.
+    # Obvious prompt-injection / prompt-extraction attempts are answered without a model call, so a
+    # blocked message costs no Gemini quota.
     if looks_like_injection(clean_message):
         return ChatResponse(response=INJECTION_REPLY, session_id=session_id)
 
-    # Admission check: if the shared daily budget is already spent, refuse now without touching ADK.
-    try:
-        await guard.budget.require_available()
-    except BudgetExhausted as spent:
-        raise _budget_spent(spent) from None
-    except GuardUnavailable:
-        raise _unavailable() from None
-
-    turn = TurnState(budget=guard.budget)
     try:
         async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
             response_text, _ = await run_query(
                 message=clean_message,
                 user_id="user",
                 session_id=session_id,
-                turn=turn,
             )
     except Exception as exc:
-        # If the budget ended mid-turn, that is the real story; report it instead of the side effect.
-        if turn.exhausted is not None:
-            raise _budget_spent(turn.exhausted) from None
-        if turn.unavailable:
-            raise _unavailable() from None
         log_exception(exc)
         safe = classify_error(exc)
         headers = {"Retry-After": str(safe.retry_after)} if safe.retry_after else None
         raise HTTPException(
             status_code=safe.status_code, detail=safe.detail, headers=headers
         ) from None
-
-    # The budget ran out part-way through this turn (for example after the coordinator's call but
-    # before the specialist's): the plugin replaced the refused call with a friendly message.
-    if turn.exhausted is not None:
-        raise _budget_spent(turn.exhausted)
-    if turn.unavailable:
-        raise _unavailable()
 
     if not response_text:
         response_text = "I didn't get a response. Please try again."

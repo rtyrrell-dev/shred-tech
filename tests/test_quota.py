@@ -1,23 +1,5 @@
-import pytest
-
 from guards import quota
-from guards.quota import MAX_CALLS_PER_TURN, daily_quota
-
-
-def test_default_quota_is_20_requests_per_day():
-    assert daily_quota() == 20
-
-
-@pytest.mark.parametrize("quota_value", ["35", "100", "1500"])
-def test_quota_can_be_set_from_the_environment(monkeypatch, quota_value):
-    monkeypatch.setenv("GEMINI_DAILY_QUOTA", quota_value)
-    assert daily_quota() == int(quota_value)
-
-
-@pytest.mark.parametrize("bad", ["abc", "0", "-5", "2.5", "  ", ""])
-def test_invalid_quota_values_fall_back_to_the_default(monkeypatch, bad):
-    monkeypatch.setenv("GEMINI_DAILY_QUOTA", bad)
-    assert daily_quota() == quota.DEFAULT_DAILY_QUOTA
+from guards.quota import MAX_CALLS_PER_TURN
 
 
 def test_per_turn_cap_is_still_4_model_requests():

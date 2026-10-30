@@ -19,19 +19,14 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Protocol
+from typing import Callable, Protocol
 
 from guards import is_local_dev
-from guards.quota import daily_request_budget
-
-if TYPE_CHECKING:
-    from guards.budget import RequestBudget
 
 logger = logging.getLogger("shred_tech.guard")
 
-# --- Limits (tune for your Gemini quota; the global cap is the real budget guard) ---------------
+# --- Limits ------------------------------------------------------------------------------------
 IP_PER_MINUTE = 10
-# The shared daily budget (Gemini requests per day) lives in guards/budget.py.
 SESSION_MAX_MESSAGES = 30
 SESSION_TTL_SECONDS = 24 * 60 * 60
 STORE_TIMEOUT_SECONDS = 2.0
@@ -213,16 +208,6 @@ class Guard:
     ip_per_minute: int = IP_PER_MINUTE
     session_max_messages: int = SESSION_MAX_MESSAGES
     clock: Callable[[], float] = time.time
-    # The shared daily budget of Gemini requests. Default cap: GEMINI_DAILY_QUOTA x GEMINI_QUOTA_SAFETY.
-    budget_cap: int | None = None
-    budget: "RequestBudget | None" = None
-
-    def __post_init__(self) -> None:
-        if self.store is not None and self.budget is None:
-            from guards.budget import RequestBudget  # local import: budget.py imports this module
-
-            cap = self.budget_cap if self.budget_cap is not None else daily_request_budget()
-            self.budget = RequestBudget(self.store, cap, self.clock)
 
     async def _store_call(self, coro):
         return await store_call(coro)

@@ -1,14 +1,8 @@
-import asyncio
-import time
-
 import pytest
-from fastapi.testclient import TestClient
 from google.genai import errors as genai_errors
 
-import api.main as main
 from guards.errors import RATE_LIMIT_MESSAGE, classify_error
-from guards.quota import DAILY_QUOTA_MESSAGE, quota_day_window
-from guards.ratelimit import Guard, MemoryStore
+from guards.quota import DAILY_QUOTA_MESSAGE
 
 DAY_QUOTA_ID = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
 MINUTE_QUOTA_ID = "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
@@ -53,36 +47,3 @@ def test_other_429s_do_not_claim_the_daily_quota_is_used_up(quota_id):
 @pytest.mark.parametrize("quota_id", [DAY_QUOTA_ID, None])
 def test_provider_error_text_never_reaches_the_user(quota_id):
     assert "must not reach users" not in classify_error(gemini_429(quota_id)).detail
-
-
-@pytest.fixture
-def client(monkeypatch):
-    async def ok(**_):
-        return "ok", "SetupAgent"
-
-    monkeypatch.setattr(main, "run_query", ok)
-    return TestClient(main.app)
-
-
-def spend_all(guard):
-    for _ in range(guard.budget.cap):
-        asyncio.run(guard.budget.take())
-
-
-def test_hitting_the_shared_budget_returns_the_daily_503(client, monkeypatch):
-    guard = Guard(store=MemoryStore(), ip_per_minute=100, budget_cap=1)
-    monkeypatch.setattr(main, "guard", guard)
-    spend_all(guard)
-    res = client.post("/api/agent", json={"message": "hi"})
-    assert res.status_code == 503
-    assert res.json()["detail"] == DAILY_QUOTA_MESSAGE
-    assert 1 <= int(res.headers["retry-after"]) <= 25 * 3600
-
-
-def test_retry_after_reflects_the_real_time_to_reset(client, monkeypatch):
-    guard = Guard(store=MemoryStore(), ip_per_minute=100, budget_cap=1)
-    monkeypatch.setattr(main, "guard", guard)
-    spend_all(guard)
-    res = client.post("/api/agent", json={"message": "hi"})
-    expected = quota_day_window(time.time())[1]
-    assert abs(int(res.headers["retry-after"]) - expected) <= 5
