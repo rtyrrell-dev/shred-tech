@@ -124,14 +124,24 @@ async def test_missing_store_fails_closed():
         await Guard(store=None).check_request("1.1.1.1", None)
 
 
-def test_unconfigured_on_vercel_means_no_store(monkeypatch):
-    monkeypatch.setenv("VERCEL", "1")
+def test_unconfigured_store_fails_closed_by_default(monkeypatch):
+    # No Upstash credentials and no explicit local-dev flag => no store => requests are refused.
+    # Note the VERCEL variable is deliberately absent: Vercel only exposes it when a project
+    # setting is on, so a missing VERCEL must never be what keeps protection enabled.
+    monkeypatch.delenv("VERCEL", raising=False)
+    monkeypatch.delenv("SHRED_LOCAL_DEV", raising=False)
     assert build_store_from_env() is None
 
 
-def test_unconfigured_locally_uses_memory(monkeypatch):
-    monkeypatch.delenv("VERCEL", raising=False)
+def test_in_memory_limiter_requires_explicit_local_dev_flag(monkeypatch):
+    monkeypatch.setenv("SHRED_LOCAL_DEV", "1")
     assert isinstance(build_store_from_env(), MemoryStore)
+
+
+def test_local_dev_flag_must_be_exactly_one(monkeypatch):
+    for value in ("0", "true", "yes", ""):
+        monkeypatch.setenv("SHRED_LOCAL_DEV", value)
+        assert build_store_from_env() is None
 
 
 def test_upstash_credentials_build_upstash_store(monkeypatch):
@@ -168,24 +178,21 @@ async def test_upstash_store_sets_expiry_only_on_first_hit():
 
 # --- client IP -----------------------------------------------------------
 
-def test_forwarded_headers_ignored_off_vercel(monkeypatch):
-    monkeypatch.delenv("VERCEL", raising=False)
+def test_forwarded_headers_ignored_in_local_dev(monkeypatch):
+    monkeypatch.setenv("SHRED_LOCAL_DEV", "1")
     assert client_ip({"x-real-ip": "9.9.9.9"}, "5.5.5.5") == "5.5.5.5"
 
 
-def test_real_ip_header_trusted_on_vercel(monkeypatch):
-    monkeypatch.setenv("VERCEL", "1")
+def test_real_ip_header_trusted_by_default(monkeypatch):
     assert client_ip({"x-real-ip": "9.9.9.9"}, "10.0.0.1") == "9.9.9.9"
     assert client_ip({"x-vercel-forwarded-for": "8.8.8.8, 1.1.1.1"}, None) == "8.8.8.8"
 
 
 def test_raw_x_forwarded_for_is_never_used(monkeypatch):
-    monkeypatch.setenv("VERCEL", "1")
     assert client_ip({"x-forwarded-for": "6.6.6.6"}, "10.0.0.1") == "10.0.0.1"
 
 
-def test_ipv6_is_grouped_by_64(monkeypatch):
-    monkeypatch.setenv("VERCEL", "1")
+def test_ipv6_is_grouped_by_64():
     a = client_ip({"x-real-ip": "2001:db8:1:2:aaaa::1"}, None)
     b = client_ip({"x-real-ip": "2001:db8:1:2:bbbb::9"}, None)
     assert a == b

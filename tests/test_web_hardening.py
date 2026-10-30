@@ -56,10 +56,9 @@ def test_wildcard_origin_is_never_configured():
     assert "*" not in allowed_origins()
 
 
-def test_localhost_only_allowed_off_vercel(monkeypatch):
-    monkeypatch.setenv("VERCEL", "1")
-    assert allowed_origins() == [FRONTEND_ORIGIN]
-    monkeypatch.delenv("VERCEL")
+def test_localhost_only_allowed_in_explicit_local_dev(monkeypatch):
+    assert allowed_origins() == [FRONTEND_ORIGIN]  # default is production-strict
+    monkeypatch.setenv("SHRED_LOCAL_DEV", "1")
     assert "http://localhost:5173" in allowed_origins()
 
 

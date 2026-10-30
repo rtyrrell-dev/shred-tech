@@ -22,6 +22,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
+from guards import is_local_dev
+
 logger = logging.getLogger("shred_tech.guard")
 
 # --- Limits (tune for your Gemini quota; the global cap is the real budget guard) ---------------
@@ -106,7 +108,7 @@ class UpstashStore:
 
 
 def build_store_from_env() -> Store | None:
-    """Upstash store if configured; in-memory locally; None (fail closed) on Vercel without config.
+    """Upstash store if configured; in-memory only in explicit local dev; otherwise None (fail closed).
 
     Accepts the Upstash variable names and the legacy Vercel KV names the marketplace may inject.
     """
@@ -116,25 +118,25 @@ def build_store_from_env() -> Store | None:
         from upstash_redis.asyncio import Redis
 
         return UpstashStore(Redis(url=url, token=token, rest_retries=1, rest_retry_interval=0.2))
-    if os.environ.get("VERCEL"):
-        logger.error("rate limit store is not configured on Vercel; failing closed")
-        return None
-    logger.warning("no Upstash credentials found; using in-memory limiter (local development only)")
-    return MemoryStore()
+    if is_local_dev():
+        logger.warning("SHRED_LOCAL_DEV=1 and no Upstash credentials: using in-memory limiter")
+        return MemoryStore()
+    logger.error("rate limit store is not configured; failing closed")
+    return None
 
 
 def client_ip(headers, peer_host: str | None) -> str:
     """Best-effort client IP, normalised for rate-limit keys.
 
-    On Vercel, ``x-real-ip`` / ``x-vercel-forwarded-for`` are set by Vercel itself (Vercel overwrites
-    X-Forwarded-For too, to stop spoofing), so they are trustworthy there. Anywhere else a client
-    could send those headers itself, so we ignore them and use the socket peer instead.
+    Behind Vercel, ``x-real-ip`` / ``x-vercel-forwarded-for`` are set by Vercel itself (it overwrites
+    X-Forwarded-For too, to stop spoofing), so they are trustworthy. In explicit local dev there is no
+    such proxy and a client could send those headers itself, so we ignore them and use the socket peer.
 
     IPv6 addresses are grouped by /64: a single user typically controls a whole /64, so keying on
     the full address would let them dodge limits by rotating addresses.
     """
     raw = None
-    if os.environ.get("VERCEL"):
+    if not is_local_dev():
         raw = headers.get("x-real-ip") or headers.get("x-vercel-forwarded-for")
         if raw:
             raw = raw.split(",")[0].strip()
