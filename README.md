@@ -235,11 +235,11 @@ Summary of what protects the deployment:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `GEMINI_API_KEY` | Yes | Gemini API access |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Yes on Vercel | Rate-limit store. Without them the API returns 503 (fail-closed). `KV_REST_API_URL`/`KV_REST_API_TOKEN` are also accepted. |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Yes in production | Rate-limit store. Without them the API returns 503 (fail-closed). `KV_REST_API_URL`/`KV_REST_API_TOKEN` are also accepted. |
 | `GLOBAL_DAILY_LIMIT` | No (default 300) | Total chat requests per day across all users |
 | `LOG_USER_TEXT` | No (off) | Set to `1` to also log truncated message/reply text locally |
 
-Locally, with no Upstash credentials, the API uses an in-memory limiter so development just works.
+**Local development:** the API is production-strict by default. Add `SHRED_LOCAL_DEV=1` to your local `.env` (it is in `.env.example`) to use an in-memory limiter, allow the Vite dev server's origin and ignore proxy IP headers. **Never set `SHRED_LOCAL_DEV` in Vercel.**
 
 ---
 
