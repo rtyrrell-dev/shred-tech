@@ -2,6 +2,7 @@ import uuid
 from dotenv import load_dotenv
 load_dotenv()
 
+from google.adk.agents.run_config import RunConfig
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
@@ -16,6 +17,10 @@ INITIAL_STATE = {
     "bridge_type": None,
     "symptoms_mentioned": [],
 }
+
+# Upper bound on model calls in one user turn (coordinator + specialist + each tool round).
+# A normal turn needs about 3-6; ADK's default of 500 would let a looping agent run up a bill.
+MAX_LLM_CALLS_PER_TURN = 10
 
 session_service = InMemorySessionService()
 runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
@@ -65,6 +70,7 @@ async def run_query(
         user_id=user_id,
         session_id=session_id,
         new_message=user_message,
+        run_config=RunConfig(max_llm_calls=MAX_LLM_CALLS_PER_TURN),
     ):
         logger.observe(event)  # read-only — never touches session state
 
