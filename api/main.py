@@ -1,5 +1,4 @@
 import asyncio
-import os
 import re
 from contextlib import asynccontextmanager
 
@@ -10,7 +9,7 @@ from pydantic import BaseModel, field_validator
 
 load_dotenv()
 
-from agent.runner_utils import runner, session_service, APP_NAME, INITIAL_STATE, run_query
+from agent.runner_utils import run_query, runner
 from guards.abuse import INJECTION_REPLY, filter_output, looks_like_injection
 from guards.cors import allowed_origins
 from guards.errors import classify_error, log_exception
@@ -107,9 +106,11 @@ async def chat(request: ChatRequest, http_request: Request):
             status_code=limit.status_code,
             detail=limit.message,
             headers={"Retry-After": str(limit.retry_after)},
-        )
+        ) from None
     except GuardUnavailable:
-        raise HTTPException(status_code=503, detail=UNAVAILABLE_MESSAGE, headers={"Retry-After": "30"})
+        raise HTTPException(
+            status_code=503, detail=UNAVAILABLE_MESSAGE, headers={"Retry-After": "30"}
+        ) from None
 
     clean_message = sanitize_input(request.message)
 
@@ -128,7 +129,9 @@ async def chat(request: ChatRequest, http_request: Request):
         log_exception(exc)
         safe = classify_error(exc)
         headers = {"Retry-After": str(safe.retry_after)} if safe.retry_after else None
-        raise HTTPException(status_code=safe.status_code, detail=safe.detail, headers=headers)
+        raise HTTPException(
+            status_code=safe.status_code, detail=safe.detail, headers=headers
+        ) from None
 
     if not response_text:
         response_text = "I didn't get a response. Please try again."
