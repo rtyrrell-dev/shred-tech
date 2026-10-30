@@ -16,7 +16,9 @@ from guards.quota import DAILY_QUOTA_MESSAGE, quota_day_window
 logger = logging.getLogger("shred_tech.api")
 
 # A 429 from Gemini can be a per-minute limit or the daily quota, and not every 429 says which.
-# We only claim "daily" (and the reset time) when the error names a per-day quota.
+# We only claim "daily" (and the reset time) when the error names a per-day quota. Only that case
+# gets a Retry-After: Google documents the reset as midnight Pacific time, so the wait is known. For
+# any other 429 we do not know how long to wait, so we send no Retry-After rather than invent one.
 RATE_LIMIT_MESSAGE = (
     "SHRED TECH is hitting its free-tier rate limit right now. Please try again in a minute."
 )
@@ -56,7 +58,7 @@ def classify_error(exc: BaseException) -> SafeError:
                 if _is_daily_quota(cause):
                     seconds_to_reset = quota_day_window(time.time())[1]
                     return SafeError(503, DAILY_QUOTA_MESSAGE, retry_after=seconds_to_reset)
-                return SafeError(503, RATE_LIMIT_MESSAGE, retry_after=60)
+                return SafeError(503, RATE_LIMIT_MESSAGE)
     return SafeError(500, GENERIC_MESSAGE)
 
 

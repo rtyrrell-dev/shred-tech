@@ -17,10 +17,10 @@ def _quota_error():
     )
 
 
-def test_quota_error_becomes_friendly_503_with_retry_after():
+def test_quota_error_becomes_friendly_503_without_an_invented_retry_after():
     safe = classify_error(_quota_error())
     assert (safe.status_code, safe.detail) == (503, RATE_LIMIT_MESSAGE)
-    assert safe.retry_after == 60
+    assert safe.retry_after is None
 
 
 def test_wrapped_quota_error_is_still_recognised():
@@ -73,7 +73,32 @@ def test_endpoint_quota_error_is_friendly(client, monkeypatch):
     res = client.post("/api/agent", json={"message": "hello"})
     assert res.status_code == 503
     assert res.json()["detail"] == RATE_LIMIT_MESSAGE
-    assert res.headers["retry-after"] == "60"
+    assert "retry-after" not in res.headers
+    assert SECRET_DETAIL not in res.text
+
+
+def test_endpoint_per_day_quota_error_names_the_daily_reset(client, monkeypatch):
+    import api.main as main
+    from guards.quota import DAILY_QUOTA_MESSAGE
+
+    async def boom(**_):
+        raise genai_errors.ClientError(
+            429,
+            {
+                "error": {
+                    "code": 429,
+                    "message": SECRET_DETAIL,
+                    "status": "RESOURCE_EXHAUSTED",
+                    "details": [{"violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}],
+                }
+            },
+        )
+
+    monkeypatch.setattr(main, "run_query", boom)
+    res = client.post("/api/agent", json={"message": "hello"})
+    assert res.status_code == 503
+    assert res.json()["detail"] == DAILY_QUOTA_MESSAGE
+    assert 1 <= int(res.headers["retry-after"]) <= 25 * 3600  # seconds to the next Pacific midnight
     assert SECRET_DETAIL not in res.text
 
 

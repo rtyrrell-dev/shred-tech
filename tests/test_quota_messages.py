@@ -41,7 +41,7 @@ def test_other_429s_do_not_claim_the_daily_quota_is_used_up(quota_id):
     safe = classify_error(gemini_429(quota_id))
     assert safe.detail == RATE_LIMIT_MESSAGE
     assert "daily" not in safe.detail.lower() and "midnight" not in safe.detail.lower()
-    assert safe.retry_after == 60
+    assert safe.retry_after is None  # no source for a wait time, so none is claimed
 
 
 @pytest.mark.parametrize("quota_id", [DAY_QUOTA_ID, None])
