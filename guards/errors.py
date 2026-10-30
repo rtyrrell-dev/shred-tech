@@ -6,14 +6,19 @@ library internals. The real cause is logged server-side by exception type and st
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 
 from google.genai import errors as genai_errors
 
+from guards.quota import DAILY_QUOTA_MESSAGE, quota_day_window
+
 logger = logging.getLogger("shred_tech.api")
 
-QUOTA_MESSAGE = (
-    "SHRED TECH is at capacity right now. Please try again in a little while."
+# A 429 from Gemini can be a per-minute limit or the daily quota, and not every 429 says which.
+# We only claim "daily" (and the reset time) when the error names a per-day quota.
+RATE_LIMIT_MESSAGE = (
+    "SHRED TECH is hitting its free-tier rate limit right now. Please try again in a minute."
 )
 TIMEOUT_MESSAGE = "That took too long to answer. Please try again."
 GENERIC_MESSAGE = "Something went wrong on our end. Please try again."
@@ -35,6 +40,11 @@ def _causes(exc: BaseException):
         exc = exc.__cause__ or exc.__context__
 
 
+def _is_daily_quota(error: genai_errors.APIError) -> bool:
+    """True if the provider's error details name a per-day quota (e.g. a quotaId containing PerDay)."""
+    return "perday" in str(getattr(error, "details", "")).lower()
+
+
 def classify_error(exc: BaseException) -> SafeError:
     """Map any exception to a status code and a message that is safe to show users."""
     for cause in _causes(exc):
@@ -43,7 +53,10 @@ def classify_error(exc: BaseException) -> SafeError:
         if isinstance(cause, genai_errors.APIError):
             status = getattr(cause, "status", "") or ""
             if cause.code == 429 or status == "RESOURCE_EXHAUSTED":
-                return SafeError(503, QUOTA_MESSAGE, retry_after=60)
+                if _is_daily_quota(cause):
+                    seconds_to_reset = quota_day_window(time.time())[1]
+                    return SafeError(503, DAILY_QUOTA_MESSAGE, retry_after=seconds_to_reset)
+                return SafeError(503, RATE_LIMIT_MESSAGE, retry_after=60)
     return SafeError(500, GENERIC_MESSAGE)
 
 

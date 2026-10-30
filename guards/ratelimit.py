@@ -23,7 +23,13 @@ from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
 from guards import is_local_dev
-from guards.quota import global_daily_turn_limit, ip_daily_turn_limit, quota_day_window
+from guards.quota import (
+    DAILY_QUOTA_MESSAGE,
+    IP_DAILY_MESSAGE,
+    global_daily_turn_limit,
+    ip_daily_turn_limit,
+    quota_day_window,
+)
 
 logger = logging.getLogger("shred_tech.guard")
 
@@ -202,17 +208,11 @@ class Guard:
 
         count, wait = await self._hit_day(f"ip:{ip}:day")
         if count > self.ip_per_day:
-            raise LimitExceeded(
-                "You've reached today's message limit. Please come back tomorrow.", wait
-            )
+            raise LimitExceeded(IP_DAILY_MESSAGE, wait)
 
         count, wait = await self._hit_day("global:day")
         if count > self.global_per_day:
-            raise LimitExceeded(
-                "SHRED TECH has reached its daily capacity. Please try again tomorrow.",
-                wait,
-                status_code=503,
-            )
+            raise LimitExceeded(DAILY_QUOTA_MESSAGE, wait, status_code=503)
 
         session_id = await self._resolve_session(session_id)
 

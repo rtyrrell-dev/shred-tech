@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from google.genai import errors as genai_errors
 
-from guards.errors import GENERIC_MESSAGE, QUOTA_MESSAGE, TIMEOUT_MESSAGE, classify_error
+from guards.errors import GENERIC_MESSAGE, RATE_LIMIT_MESSAGE, TIMEOUT_MESSAGE, classify_error
 
 SECRET_DETAIL = "internal-detail-api-key-leak-marker"
 
@@ -19,7 +19,7 @@ def _quota_error():
 
 def test_quota_error_becomes_friendly_503_with_retry_after():
     safe = classify_error(_quota_error())
-    assert (safe.status_code, safe.detail) == (503, QUOTA_MESSAGE)
+    assert (safe.status_code, safe.detail) == (503, RATE_LIMIT_MESSAGE)
     assert safe.retry_after == 60
 
 
@@ -72,7 +72,7 @@ def test_endpoint_quota_error_is_friendly(client, monkeypatch):
     monkeypatch.setattr(main, "run_query", boom)
     res = client.post("/api/agent", json={"message": "hello"})
     assert res.status_code == 503
-    assert res.json()["detail"] == QUOTA_MESSAGE
+    assert res.json()["detail"] == RATE_LIMIT_MESSAGE
     assert res.headers["retry-after"] == "60"
     assert SECRET_DETAIL not in res.text
 
