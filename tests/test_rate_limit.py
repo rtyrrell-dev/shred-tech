@@ -32,51 +32,39 @@ def make_guard(**overrides):
 async def test_ip_minute_limit_blocks_then_recovers_next_window():
     guard, clock = make_guard(ip_per_minute=3)
     for _ in range(3):
-        await guard.check_request("1.1.1.1", None)
+        await guard.check_request("1.1.1.1", "sid")
     with pytest.raises(LimitExceeded) as exc:
-        await guard.check_request("1.1.1.1", None)
+        await guard.check_request("1.1.1.1", "sid")
     assert exc.value.status_code == 429 and 0 < exc.value.retry_after <= 60
     clock.now += 61
-    await guard.check_request("1.1.1.1", None)
+    await guard.check_request("1.1.1.1", "sid")
 
 
 async def test_limits_are_per_ip():
     guard, _ = make_guard(ip_per_minute=1)
-    await guard.check_request("1.1.1.1", None)
-    await guard.check_request("2.2.2.2", None)  # a different IP is unaffected
+    await guard.check_request("1.1.1.1", "sid")
+    await guard.check_request("2.2.2.2", "sid")  # a different IP is unaffected
     with pytest.raises(LimitExceeded):
-        await guard.check_request("1.1.1.1", None)
+        await guard.check_request("1.1.1.1", "sid")
 
 
-async def test_omitting_session_id_does_not_dodge_ip_limit():
-    # The old limiter keyed on a client-chosen session id; sending a new/no id each time reset it.
+async def test_a_new_session_id_does_not_dodge_ip_limit():
+    # The limiter once keyed on a client-chosen session id; sending a new id each time reset it.
     guard, _ = make_guard(ip_per_minute=2)
-    await guard.check_request("1.1.1.1", None)
-    await guard.check_request("1.1.1.1", "made-up-id")
+    await guard.check_request("1.1.1.1", "one")
+    await guard.check_request("1.1.1.1", "two")
     with pytest.raises(LimitExceeded):
-        await guard.check_request("1.1.1.1", None)
+        await guard.check_request("1.1.1.1", "three")
 
 
 # --- sessions ------------------------------------------------------------
 
-async def test_new_session_is_server_issued_and_then_honoured():
-    guard, _ = make_guard()
-    sid = await guard.check_request("1.1.1.1", None)
-    assert await guard.check_request("1.1.1.1", sid) == sid
-
-
-async def test_client_chosen_session_id_is_replaced():
-    guard, _ = make_guard()
-    sid = await guard.check_request("1.1.1.1", "attacker-picked-id")
-    assert sid != "attacker-picked-id"
-
-
 async def test_session_message_cap():
     guard, _ = make_guard(session_max_messages=2, ip_per_minute=100)
-    sid = await guard.check_request("1.1.1.1", None)
-    await guard.check_request("1.1.1.1", sid)
+    await guard.check_request("1.1.1.1", "sid")
+    await guard.check_request("1.1.1.1", "sid")
     with pytest.raises(LimitExceeded) as exc:
-        await guard.check_request("1.1.1.1", sid)
+        await guard.check_request("1.1.1.1", "sid")
     assert "New session" in exc.value.message
 
 
@@ -95,12 +83,12 @@ class BrokenStore:
 
 async def test_store_outage_fails_closed():
     with pytest.raises(GuardUnavailable):
-        await Guard(store=BrokenStore()).check_request("1.1.1.1", None)
+        await Guard(store=BrokenStore()).check_request("1.1.1.1", "sid")
 
 
 async def test_missing_store_fails_closed():
     with pytest.raises(GuardUnavailable):
-        await Guard(store=None).check_request("1.1.1.1", None)
+        await Guard(store=None).check_request("1.1.1.1", "sid")
 
 
 def test_unconfigured_store_fails_closed_by_default(monkeypatch):
@@ -190,17 +178,6 @@ def client(monkeypatch):
 
     monkeypatch.setattr(main, "run_query", ok)
     return TestClient(main.app)
-
-
-def test_api_issues_session_and_reuses_it(client):
-    first = client.post("/api/agent", json={"message": "hi"}).json()["session_id"]
-    second = client.post("/api/agent", json={"message": "hi", "session_id": first}).json()
-    assert second["session_id"] == first
-
-
-def test_api_replaces_unknown_session_id(client):
-    res = client.post("/api/agent", json={"message": "hi", "session_id": "abc-123"})
-    assert res.json()["session_id"] != "abc-123"
 
 
 def test_api_returns_429_with_retry_after(client, monkeypatch):

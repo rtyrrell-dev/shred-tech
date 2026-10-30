@@ -1,4 +1,4 @@
-import uuid
+import secrets
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -38,6 +38,32 @@ runner = Runner(
 )
 
 
+async def resolve_session_id(claimed: str | None, user_id: str = "user") -> str:
+    """The session id to use for a request: the client's, if this instance issued it, else a new one.
+
+    Ids are generated here, from the `secrets` module, and bound to the ADK session service: a claimed
+    id is honoured only if the service already holds that session. An unknown id (never issued, issued
+    by another serverless instance, or lost when this instance was recycled) is not an error: the
+    client simply gets a fresh server-issued id in the response and starts a new conversation. The
+    client therefore cannot mint ids, and a random 128-bit id cannot be guessed to join someone else's.
+    """
+    if claimed:
+        try:
+            existing = await session_service.get_session(
+                app_name=APP_NAME, user_id=user_id, session_id=claimed
+            )
+        except Exception:
+            existing = None
+        if existing is not None:
+            return claimed
+
+    new_id = secrets.token_hex(16)
+    await session_service.create_session(
+        app_name=APP_NAME, user_id=user_id, session_id=new_id, state=dict(INITIAL_STATE)
+    )
+    return new_id
+
+
 async def run_query(
     message: str,
     user_id: str = "user",
@@ -55,7 +81,7 @@ async def run_query(
     `turn` carries the shared-budget state for API traffic: each real Gemini request is charged to the
     budget before it is sent (guards/budget_plugin.py). Without it (eval scripts) nothing is metered.
     """
-    session_id = session_id or str(uuid.uuid4())
+    session_id = session_id or secrets.token_hex(16)
 
     try:
         existing = await session_service.get_session(

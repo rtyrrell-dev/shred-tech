@@ -18,7 +18,6 @@ import ipaddress
 import logging
 import os
 import time
-import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Protocol
 
@@ -208,7 +207,7 @@ def client_ip(headers, peer_host: str | None) -> str:
 
 @dataclass
 class Guard:
-    """Runs every per-request abuse check and issues/validates session ids."""
+    """Runs every per-request abuse check."""
 
     store: Store | None
     ip_per_minute: int = IP_PER_MINUTE
@@ -235,8 +234,8 @@ class Guard:
         count = await self._store_call(self.store.incr_window(f"rl:{name}:{bucket}", window * 2))
         return count, (bucket + 1) * window - now
 
-    async def check_request(self, ip: str, session_id: str | None) -> str:
-        """Enforce all limits for one chat request and return the session id to use.
+    async def check_request(self, ip: str, session_id: str) -> None:
+        """Enforce all limits for one chat request.
 
         Raises LimitExceeded (429/503) or GuardUnavailable (fail closed).
         """
@@ -249,8 +248,6 @@ class Guard:
                 "You're sending messages too quickly. Please wait a minute and try again.", wait
             )
 
-        session_id = await self._resolve_session(session_id)
-
         count = await self._store_call(
             self.store.incr_window(f"sessmsgs:{session_id}", SESSION_TTL_SECONDS)
         )
@@ -260,17 +257,3 @@ class Guard:
                 "Click \"New session\" to keep going.",
                 SESSION_TTL_SECONDS,
             )
-        return session_id
-
-    async def _resolve_session(self, claimed: str | None) -> str:
-        """Accept only session ids this server issued; otherwise issue a fresh one.
-
-        The client may *claim* an id, but it is only honoured if the id exists in the store. Ids are
-        random UUIDs, so they cannot be guessed to join someone else's conversation, and a client
-        cannot mint ids to dodge the per-session cap.
-        """
-        if claimed and await self._store_call(self.store.exists(f"sess:{claimed}")):
-            return claimed
-        new_id = str(uuid.uuid4())
-        await self._store_call(self.store.set_with_ttl(f"sess:{new_id}", SESSION_TTL_SECONDS))
-        return new_id

@@ -9,7 +9,7 @@ from pydantic import BaseModel, field_validator
 
 load_dotenv()
 
-from agent.runner_utils import run_query, runner
+from agent.runner_utils import resolve_session_id, run_query, runner
 from guards.abuse import INJECTION_REPLY, filter_output, looks_like_injection
 from guards.budget import BudgetExhausted, TurnState
 from guards.cors import allowed_origins
@@ -113,8 +113,10 @@ def _unavailable() -> HTTPException:
 @app.post("/api/agent", response_model=ChatResponse)
 async def chat(request: ChatRequest, http_request: Request):
     ip = client_ip(http_request.headers, http_request.client.host if http_request.client else None)
+    # Server-issued: an id this instance does not know is replaced, not rejected (see runner_utils).
+    session_id = await resolve_session_id(request.session_id)
     try:
-        session_id = await guard.check_request(ip, request.session_id)
+        await guard.check_request(ip, session_id)
     except LimitExceeded as limit:
         raise HTTPException(
             status_code=limit.status_code,
