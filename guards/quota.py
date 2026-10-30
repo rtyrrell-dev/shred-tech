@@ -37,6 +37,18 @@ def ip_daily_turn_limit(global_limit: int) -> int:
     return max(1, global_limit // IP_SHARE_DENOMINATOR)
 
 
+# Shown when the daily free-tier quota is used up. The reset time is stated because Google's docs say
+# daily request quotas reset at midnight Pacific time.
+DAILY_QUOTA_MESSAGE = (
+    "SHRED TECH has used up its daily free-tier quota for the Gemini API. "
+    "It will be back after the quota resets at midnight Pacific time."
+)
+IP_DAILY_MESSAGE = (
+    "The demo runs on a small free-tier quota, so each visitor gets a limited number of questions "
+    "per day. You've used yours; it resets at midnight Pacific time."
+)
+
+
 # --- Daily quota -> turns --------------------------------------------------------------------
 
 import logging

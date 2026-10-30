@@ -74,6 +74,12 @@ The daily counters reset at midnight Pacific time, because Google's documentatio
 quotas reset then (it does not say how daylight saving is handled, so the counters follow the
 wall clock in `America/Los_Angeles`). Time-zone rules come from the pinned `tzdata` package.
 
+When the daily budget is used up, users see a message saying the demo hit its daily free-tier quota
+and will be back after the reset at midnight Pacific time. That wording is used only when the cause is
+known to be the daily quota (our own daily cap, or a Gemini error naming a per-day quota). Other
+Gemini rate-limit errors get a neutral "try again in a minute" message, because they may be per-minute
+limits that clear on their own.
+
 ## How the rate limiter works
 
 The API runs as short-lived serverless functions. Two requests may be handled by different

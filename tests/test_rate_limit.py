@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 import api.main as main
 from guards import ratelimit
+from guards.quota import IP_DAILY_MESSAGE
 from guards.ratelimit import (
     Guard,
     GuardUnavailable,
@@ -68,7 +69,7 @@ async def test_ip_daily_limit():
         clock.now += 61  # step past the per-minute window but stay in the same day
     with pytest.raises(LimitExceeded) as exc:
         await guard.check_request("1.1.1.1", None)
-    assert "today" in exc.value.message
+    assert exc.value.message == IP_DAILY_MESSAGE
 
 
 # --- global budget circuit breaker ---------------------------------------
