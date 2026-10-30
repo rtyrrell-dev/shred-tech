@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import pytest
@@ -62,11 +63,15 @@ def client(monkeypatch):
     return TestClient(main.app)
 
 
-def test_hitting_our_global_cap_returns_the_daily_503(client, monkeypatch):
-    monkeypatch.setattr(main, "guard", Guard(store=MemoryStore(), global_per_day=1, ip_per_minute=100))
-    assert client.post("/api/agent", json={"message": "hi"}).status_code == 200
-    # A different visitor: the global cap, not the per-IP cap, is what stops them.
-    monkeypatch.setattr(main, "client_ip", lambda headers, peer: "9.9.9.9")
+def spend_all(guard):
+    for _ in range(guard.budget.cap):
+        asyncio.run(guard.budget.take())
+
+
+def test_hitting_the_shared_budget_returns_the_daily_503(client, monkeypatch):
+    guard = Guard(store=MemoryStore(), ip_per_minute=100, budget_cap=1)
+    monkeypatch.setattr(main, "guard", guard)
+    spend_all(guard)
     res = client.post("/api/agent", json={"message": "hi"})
     assert res.status_code == 503
     assert res.json()["detail"] == DAILY_QUOTA_MESSAGE
@@ -74,9 +79,9 @@ def test_hitting_our_global_cap_returns_the_daily_503(client, monkeypatch):
 
 
 def test_retry_after_reflects_the_real_time_to_reset(client, monkeypatch):
-    guard = Guard(store=MemoryStore(), global_per_day=1, ip_per_minute=100)
+    guard = Guard(store=MemoryStore(), ip_per_minute=100, budget_cap=1)
     monkeypatch.setattr(main, "guard", guard)
-    client.post("/api/agent", json={"message": "hi"})
+    spend_all(guard)
     res = client.post("/api/agent", json={"message": "hi"})
     expected = quota_day_window(time.time())[1]
     assert abs(int(res.headers["retry-after"]) - expected) <= 5

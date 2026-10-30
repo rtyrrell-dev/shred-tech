@@ -30,7 +30,7 @@ DAILY_QUOTA_MESSAGE = (
 )
 
 
-# --- Daily quota -> turns --------------------------------------------------------------------
+# --- Daily quota --------------------------------------------------------------------
 
 import logging
 import os
@@ -43,12 +43,6 @@ logger = logging.getLogger("shred_tech.quota")
 # Free-tier daily request quota (RPD) for the key. Google does not publish a fixed number for a
 # model, so it is configuration: set GEMINI_DAILY_QUOTA to what AI Studio shows for your project.
 DEFAULT_DAILY_QUOTA = 20
-
-# Use at most 80% of the quota for chat turns. The rest absorbs anything else sharing the project's
-# quota (evals, local development with the same key) and the window where our counter and Google's
-# disagree. Quotas are per project, not per key, so a second key in the same project shares them.
-SAFETY_PERCENT = 80
-
 
 # Google resets the daily request quota at midnight Pacific time (Gemini API rate-limits docs:
 # "Requests per day (RPD) quotas reset at midnight Pacific time"). The docs do not say how daylight
@@ -98,20 +92,6 @@ def _positive_int_env(name: str) -> int | None:
 def daily_quota() -> int:
     """GEMINI_DAILY_QUOTA, defaulting to 20 requests per day."""
     return _positive_int_env("GEMINI_DAILY_QUOTA") or DEFAULT_DAILY_QUOTA
-
-
-def global_daily_turn_limit() -> int:
-    """Chat turns allowed per day across all users.
-
-    floor(quota * 0.8 / MAX_CALLS_PER_TURN), computed with integers so there is no float rounding.
-    Because no turn can make more than MAX_CALLS_PER_TURN requests, serving this many turns can
-    never use more than 80% of the quota. GLOBAL_DAILY_LIMIT overrides the derived value.
-    At least 1: with a tiny quota the margin cannot be honoured, but the demo still serves one turn.
-    """
-    override = _positive_int_env("GLOBAL_DAILY_LIMIT")
-    if override is not None:
-        return override
-    return max(1, daily_quota() * SAFETY_PERCENT // (100 * MAX_CALLS_PER_TURN))
 
 
 # --- Daily quota -> request budget ------------------------------------------------------------

@@ -24,9 +24,6 @@ class Clock:
 
 def make_guard(**overrides):
     clock = overrides.pop("clock", Clock())
-    # Daily limits default to the tiny free-tier values; these tests exercise other limits, so give
-    # the daily ones headroom unless a test sets them explicitly.
-    overrides.setdefault("global_per_day", 1000)
     return Guard(store=MemoryStore(clock), clock=clock, **overrides), clock
 
 
@@ -58,17 +55,6 @@ async def test_omitting_session_id_does_not_dodge_ip_limit():
     await guard.check_request("1.1.1.1", "made-up-id")
     with pytest.raises(LimitExceeded):
         await guard.check_request("1.1.1.1", None)
-
-
-# --- global budget circuit breaker ---------------------------------------
-
-async def test_global_daily_cap_returns_503_for_everyone():
-    guard, _ = make_guard(global_per_day=2, ip_per_minute=100)
-    await guard.check_request("1.1.1.1", None)
-    await guard.check_request("2.2.2.2", None)
-    with pytest.raises(LimitExceeded) as exc:
-        await guard.check_request("3.3.3.3", None)
-    assert exc.value.status_code == 503
 
 
 # --- sessions ------------------------------------------------------------
