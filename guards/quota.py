@@ -41,6 +41,8 @@ def ip_daily_turn_limit(global_limit: int) -> int:
 
 import logging
 import os
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger("shred_tech.quota")
 
@@ -52,6 +54,31 @@ DEFAULT_DAILY_QUOTA = 20
 # quota (evals, local development with the same key) and the window where our counter and Google's
 # disagree. Quotas are per project, not per key, so a second key in the same project shares them.
 SAFETY_PERCENT = 80
+
+
+# Google resets the daily request quota at midnight Pacific time (Gemini API rate-limits docs:
+# "Requests per day (RPD) quotas reset at midnight Pacific time"). The docs do not say how daylight
+# saving is handled, so we follow the wall clock in America/Los_Angeles.
+RESET_TIMEZONE_NAME = "America/Los_Angeles"
+try:
+    RESET_TIMEZONE = ZoneInfo(RESET_TIMEZONE_NAME)
+except ZoneInfoNotFoundError:  # tzdata is a pinned dependency, so this should not happen
+    from datetime import timezone
+
+    logger.error("no time-zone data for %s; using fixed UTC-8 (off by 1h in summer)", RESET_TIMEZONE_NAME)
+    RESET_TIMEZONE = timezone(timedelta(hours=-8))
+
+
+def quota_day_window(now: float) -> tuple[int, int]:
+    """(day number, seconds until the next reset) for the quota day containing `now`.
+
+    The quota day runs midnight to midnight Pacific time, so our daily counters roll over at the same
+    moment Google's quota does. Seconds are computed from absolute timestamps, so the 23- and 25-hour
+    days around daylight-saving changes are handled correctly.
+    """
+    local = datetime.fromtimestamp(now, RESET_TIMEZONE)
+    next_midnight = datetime.combine(local.date() + timedelta(days=1), datetime.min.time(), RESET_TIMEZONE)
+    return local.date().toordinal(), max(1, int(next_midnight.timestamp() - now))
 
 
 def _positive_int_env(name: str) -> int | None:

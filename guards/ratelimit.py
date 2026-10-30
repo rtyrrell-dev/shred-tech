@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
 from guards import is_local_dev
-from guards.quota import global_daily_turn_limit, ip_daily_turn_limit
+from guards.quota import global_daily_turn_limit, ip_daily_turn_limit, quota_day_window
 
 logger = logging.getLogger("shred_tech.guard")
 
@@ -180,6 +180,12 @@ class Guard:
         count = await self._store_call(self.store.incr_window(f"rl:{name}:{bucket}", window * 2))
         return count, (bucket + 1) * window - now
 
+    async def _hit_day(self, name: str) -> tuple[int, int]:
+        """Like _hit, but the window is the quota day (midnight to midnight Pacific time)."""
+        day, seconds_left = quota_day_window(self.clock())
+        count = await self._store_call(self.store.incr_window(f"rl:{name}:{day}", 2 * DAY))
+        return count, seconds_left
+
     async def check_request(self, ip: str, session_id: str | None) -> str:
         """Enforce all limits for one chat request and return the session id to use.
 
@@ -194,13 +200,13 @@ class Guard:
                 "You're sending messages too quickly. Please wait a minute and try again.", wait
             )
 
-        count, wait = await self._hit(f"ip:{ip}:day", DAY)
+        count, wait = await self._hit_day(f"ip:{ip}:day")
         if count > self.ip_per_day:
             raise LimitExceeded(
                 "You've reached today's message limit. Please come back tomorrow.", wait
             )
 
-        count, wait = await self._hit("global:day", DAY)
+        count, wait = await self._hit_day("global:day")
         if count > self.global_per_day:
             raise LimitExceeded(
                 "SHRED TECH has reached its daily capacity. Please try again tomorrow.",

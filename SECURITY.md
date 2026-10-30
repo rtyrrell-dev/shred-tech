@@ -70,6 +70,10 @@ used its maximum the demo stays within 80% of the quota. The remaining 20% cover
 same project quota (for example evals) and the gap between this counter and the provider's own
 reset. `GEMINI_DAILY_QUOTA` defaults to 20 and `GLOBAL_DAILY_LIMIT` overrides the derived value.
 
+The daily counters reset at midnight Pacific time, because Google's documentation says daily request
+quotas reset then (it does not say how daylight saving is handled, so the counters follow the
+wall clock in `America/Los_Angeles`). Time-zone rules come from the pinned `tzdata` package.
+
 ## How the rate limiter works
 
 The API runs as short-lived serverless functions. Two requests may be handled by different
