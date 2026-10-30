@@ -216,8 +216,8 @@ Both projects auto-redeploy when you push to `main`. If you update the backend U
 
 ## Security
 
-This is a public demo with no login, so it is hardened against abuse. The threat model is kept
-privately; the controls themselves live in `guards/` and are covered by `tests/`.
+This is a public demo with no login, so it is hardened against abuse. Full threat model, current
+limits and accepted risks: **[SECURITY.md](SECURITY.md)**.
 
 Summary of what protects the deployment:
 

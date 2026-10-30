@@ -25,7 +25,7 @@ jobs:
       # requirements.txt is fully pinned, so audit it as-is (no resolver, deterministic).
       # Ignored advisories are the ones we cannot fix yet because google-adk 2.1.0 caps
       # starlette<1 and opentelemetry-api<=1.41.1. Each was reviewed and none touches code this app
-      # uses. Remove an ID once the pin can move.
+      # uses; see SECURITY.md "Accepted dependency risk". Remove an ID once the pin can move.
       - name: pip-audit
         run: >
           pip-audit -r requirements.txt --no-deps --disable-pip
@@ -53,7 +53,7 @@ jobs:
       - name: npm audit (production dependencies)
         run: npm audit --omit=dev --audit-level=high
       # Informational: build tooling (vite/esbuild) is not shipped; its advisories need the vite
-      # 5 -> 8 major bump, tracked as a follow-up.
+      # 5 -> 8 major bump, tracked as a follow-up in SECURITY.md.
       - name: npm audit (all dependencies, informational)
         run: npm audit || true
 
