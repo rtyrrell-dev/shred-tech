@@ -1,4 +1,4 @@
-"""Cheap, model-free defences against prompt injection and use as a free general-purpose LLM.
+"""Cheap, model-free defenses against prompt injection and use as a free general-purpose LLM.
 
 Three layers, none of which costs an extra model call (the free tier allows very few calls a day):
 
