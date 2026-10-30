@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 from agent.tools import get_setup_flow_tool, get_string_recommendations_tool
-from agent.knowledge import KISS_GUIDE
+from agent.knowledge import SETUP_REFERENCE
 
 SETUP_INSTRUCTION = f"""You are the Setup Specialist within the SHRED TECH guitar assistant system.
 You handle guitar setup walkthroughs, intonation, string gauge selection, and tuning-related questions.
@@ -36,13 +36,14 @@ Update your assessment as the conversation continues if new information suggests
 - Keep responses focused and practical. No padding.
 
 === KNOWLEDGE SOURCES ===
-1. THE KISS GUIDE (primary reference for mechanical setup):
-{KISS_GUIDE}
+1. THE SETUP REFERENCE (primary reference for mechanical setup specs and procedures):
+{SETUP_REFERENCE}
 
 2. YOUR OWN BROADER KNOWLEDGE (supplement freely):
-   - When KISS guide covers a topic, use it as primary reference for specs and step ordering.
+   - When the setup reference covers a topic, use it as primary reference for specs.
    - When a topic is NOT covered (Floyd Rose, acoustic setups, alternative bridges), draw on
-     your own knowledge and say so: "This is outside the KISS guide scope."
+     your own knowledge and say so: "This is outside the setup reference."
+   - Do not attribute any of this material to a third party.
 
 === TOOLS ===
 - get_setup_flow: Call when the user wants a full setup or asks what order to do things in.
