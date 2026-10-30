@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import time
@@ -14,6 +15,7 @@ load_dotenv()
 
 from agent.runner_utils import runner, session_service, APP_NAME, INITIAL_STATE, run_query
 from guards.errors import classify_error, log_exception
+from guards.limits import BodySizeLimitMiddleware
 
 # Rate limiting: max requests per window per session
 RATE_LIMIT_REQUESTS = 20
@@ -21,6 +23,10 @@ RATE_LIMIT_WINDOW_SECONDS = 600  # 10 minutes
 _rate_limit_store: dict[str, deque] = defaultdict(deque)
 
 MAX_MESSAGE_LENGTH = 2000
+
+# Hard ceiling on one model call (coordinator + specialist + tools). Without it, a slow or
+# hung provider call would hold a serverless invocation (and its bill) open.
+REQUEST_TIMEOUT_SECONDS = 25
 
 
 def check_rate_limit(session_id: str) -> bool:
@@ -52,6 +58,8 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+app.add_middleware(BodySizeLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -107,11 +115,12 @@ async def chat(request: ChatRequest):
     clean_message = sanitize_input(request.message)
 
     try:
-        response_text, _ = await run_query(
-            message=clean_message,
-            user_id="user",
-            session_id=session_id,
-        )
+        async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+            response_text, _ = await run_query(
+                message=clean_message,
+                user_id="user",
+                session_id=session_id,
+            )
     except Exception as exc:
         log_exception(exc)
         safe = classify_error(exc)
