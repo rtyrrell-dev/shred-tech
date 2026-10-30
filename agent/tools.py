@@ -64,7 +64,7 @@ def get_setup_flow(bridge_type: str) -> dict:
                     "The locking nut must be unlocked for all adjustments and locked only at the end.",
                     "Spring tension and bridge float angle must be balanced against string tension — changes to one affect the other.",
                     "Recommended: level the bridge parallel to the body first (typically 3–4 springs at 45°), then proceed with truss rod, action, nut, intonation using fine tuners.",
-                    "This is outside the standard KISS guide scope — I'll draw on broader Floyd Rose setup knowledge to walk you through it.",
+                    "This is outside the standard setup reference — I'll draw on broader Floyd Rose setup knowledge to walk you through it.",
                 ],
             },
             "bigsby": {
@@ -73,7 +73,7 @@ def get_setup_flow(bridge_type: str) -> dict:
                     "Bigsby setups follow Path B (TOM bridge is standard pairing) for bridge and radius steps.",
                     "The Bigsby unit itself doesn't require height adjustment — focus on the bridge.",
                     "Lubricate all contact points (nut, bridge pins, roller bar) thoroughly — Bigsby is sensitive to friction.",
-                    "This is outside the standard KISS guide scope — I'll supplement with broader knowledge.",
+                    "This is outside the standard setup reference — I'll supplement with broader knowledge.",
                 ],
             },
             "acoustic": {
@@ -82,7 +82,7 @@ def get_setup_flow(bridge_type: str) -> dict:
                     "Acoustic setup differs significantly from electric — saddle and nut compensation, neck angle, and bridge pin fit all matter.",
                     "There is no truss rod on many classical guitars; on steel-string acoustics, adjustment range is limited.",
                     "Saddle material (bone, tusq, plastic) affects tone and sustain significantly.",
-                    "This is outside the standard KISS guide scope — I'll draw on broader acoustic setup knowledge.",
+                    "This is outside the standard setup reference — I'll draw on broader acoustic setup knowledge.",
                 ],
             },
         }
@@ -278,7 +278,7 @@ def diagnose_issue(symptom: str) -> dict:
 def diagnose_electrical_issue(symptom: str) -> dict:
     """Maps electrical guitar symptoms to likely causes and recommended fixes.
 
-    Draws on general electronics knowledge — this is outside KISS guide scope.
+    Draws on general electronics knowledge — this is outside the setup reference.
 
     Args:
         symptom: The electrical problem being experienced. Accepted values: hum,
@@ -309,7 +309,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Inspect all solder joints under magnification for cracks or cold joints",
                 "Ensure all ground connections converge at one point (star grounding)",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "single-coil-hum": {
             "likely_causes": [
@@ -331,7 +331,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Move away from interference sources when playing",
                 "A noise gate pedal can manage hum in a live rig without modifying the guitar",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "crackling": {
             "likely_causes": [
@@ -354,7 +354,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Inspect and reflow any suspect solder joints — look for dull, grainy, or cracked surfaces",
                 "If pot cleaning doesn't fix it, replace the pot (CTS 250K or 500K are standard quality options)",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "dead-signal": {
             "likely_causes": [
@@ -377,7 +377,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Trace the signal path: pickup → selector → volume pot → output jack",
                 "Use a multimeter in continuity mode to test each component in the signal chain",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "volume-drop": {
             "likely_causes": [
@@ -400,7 +400,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Reflow all solder joints in the signal path",
                 "Consider a treble bleed mod (150pF capacitor + 100K resistor) if volume taper seems to lose highs early",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "switch-noise": {
             "likely_causes": [
@@ -420,7 +420,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Ensure the switch body is grounded if it's a metal-body switch",
                 "Tighten the switch mounting nut",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "pot-noise": {
             "likely_causes": [
@@ -439,7 +439,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Consider Bourns or Alpha pots as budget alternatives; avoid no-name pots",
                 "Check that the pot value matches the pickup type — mismatched values affect taper and frequency response",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "intermittent-signal": {
             "likely_causes": [
@@ -462,7 +462,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "Reflow all solder joints that look dull, grainy, or cracked",
                 "A proper Switchcraft or Neutrik output jack with fresh solder joints fixes 80% of intermittent signal issues",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
         "pickup-out": {
             "likely_causes": [
@@ -485,7 +485,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
                 "If the coil is open (no thud, infinite resistance on multimeter between leads), the pickup needs rewinding or replacement",
                 "On coil-split pickups, verify the tap wire isn't accidentally grounded",
             ],
-            "outside_kiss_scope": True,
+            "outside_setup_reference": True,
         },
     }
 
@@ -502,7 +502,7 @@ def diagnose_electrical_issue(symptom: str) -> dict:
             "Does it affect all pickup positions?",
         ],
         "recommended_fixes": ["Describe the issue in more detail for a targeted diagnosis."],
-        "outside_kiss_scope": True,
+        "outside_setup_reference": True,
         "additional_notes": f"'{symptom}' wasn't matched. Please describe the electrical behavior you're experiencing.",
     }
 
