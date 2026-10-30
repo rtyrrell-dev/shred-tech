@@ -13,6 +13,7 @@ from pydantic import BaseModel, field_validator
 load_dotenv()
 
 from agent.runner_utils import runner, session_service, APP_NAME, INITIAL_STATE, run_query
+from guards.errors import classify_error, log_exception
 
 # Rate limiting: max requests per window per session
 RATE_LIMIT_REQUESTS = 20
@@ -43,7 +44,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="SHRED TECH API", lifespan=lifespan)
+# Interactive docs and the OpenAPI schema are disabled: they advertise the API surface to scanners.
+app = FastAPI(
+    title="SHRED TECH API",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -104,8 +112,11 @@ async def chat(request: ChatRequest):
             user_id="user",
             session_id=session_id,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+    except Exception as exc:
+        log_exception(exc)
+        safe = classify_error(exc)
+        headers = {"Retry-After": str(safe.retry_after)} if safe.retry_after else None
+        raise HTTPException(status_code=safe.status_code, detail=safe.detail, headers=headers)
 
     if not response_text:
         response_text = "I didn't get a response. Please try again."
