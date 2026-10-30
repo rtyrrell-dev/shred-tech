@@ -73,3 +73,45 @@ async def test_fifth_turn_of_the_day_is_refused_with_default_quota():
     with pytest.raises(LimitExceeded) as exc:
         await guard.check_request("10.0.0.99", None)
     assert exc.value.status_code == 503
+
+
+# --- per-IP daily limit ------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "global_limit, per_ip",
+    [(4, 1), (6, 2), (9, 3), (20, 6), (300, 100), (3, 1), (2, 1), (1, 1)],
+)
+def test_ip_limit_is_a_third_of_the_global_limit_but_at_least_one(global_limit, per_ip):
+    assert quota.ip_daily_turn_limit(global_limit) == per_ip
+
+
+@pytest.mark.parametrize("global_limit", [3, 4, 7, 20, 100, 300])
+def test_one_ip_never_gets_more_than_a_third_of_the_day(global_limit):
+    assert quota.ip_daily_turn_limit(global_limit) * 3 <= global_limit
+
+
+def test_default_guard_allows_each_ip_one_turn_per_day():
+    guard = Guard(store=MemoryStore())
+    assert (guard.global_per_day, guard.ip_per_day) == (4, 1)
+
+
+def test_ip_limit_follows_a_global_override(monkeypatch):
+    monkeypatch.setenv("GLOBAL_DAILY_LIMIT", "12")
+    assert Guard(store=MemoryStore()).ip_per_day == 4
+
+
+def test_ip_limit_follows_an_explicit_global_argument():
+    assert Guard(store=MemoryStore(), global_per_day=30).ip_per_day == 10
+
+
+def test_explicit_ip_limit_is_respected():
+    assert Guard(store=MemoryStore(), ip_per_day=7).ip_per_day == 7
+
+
+async def test_second_turn_from_the_same_ip_is_refused_but_other_ips_are_not():
+    guard = Guard(store=MemoryStore(), ip_per_minute=100)
+    await guard.check_request("1.1.1.1", None)
+    with pytest.raises(LimitExceeded) as exc:
+        await guard.check_request("1.1.1.1", None)
+    assert exc.value.status_code == 429
+    await guard.check_request("2.2.2.2", None)  # a different visitor still gets their turn

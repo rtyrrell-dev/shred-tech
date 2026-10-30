@@ -24,6 +24,10 @@ class Clock:
 
 def make_guard(**overrides):
     clock = overrides.pop("clock", Clock())
+    # Daily limits default to the tiny free-tier values; these tests exercise other limits, so give
+    # the daily ones headroom unless a test sets them explicitly.
+    overrides.setdefault("ip_per_day", 1000)
+    overrides.setdefault("global_per_day", 1000)
     return Guard(store=MemoryStore(clock), clock=clock, **overrides), clock
 
 
