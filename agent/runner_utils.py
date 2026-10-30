@@ -11,6 +11,8 @@ from google.genai import types as genai_types
 from agent.agent import root_agent
 from agent.logging_utils import TurnLogger
 from guards.abuse import GUARD_INSTRUCTION
+from guards.budget import TurnState, current_turn
+from guards.budget_plugin import RequestBudgetPlugin
 from guards.quota import MAX_CALLS_PER_TURN
 
 APP_NAME = "shred_tech"
@@ -32,7 +34,7 @@ runner = Runner(
     agent=root_agent,
     app_name=APP_NAME,
     session_service=session_service,
-    plugins=[GlobalInstructionPlugin(GUARD_INSTRUCTION)],
+    plugins=[GlobalInstructionPlugin(GUARD_INSTRUCTION), RequestBudgetPlugin()],
 )
 
 
@@ -40,6 +42,7 @@ async def run_query(
     message: str,
     user_id: str = "user",
     session_id: str = None,
+    turn: TurnState | None = None,
 ) -> tuple[str, str]:
     """Send a single message through the full agent tree.
 
@@ -48,6 +51,9 @@ async def run_query(
         agent that produced the final substantive response.
 
     Every call is logged to logs/agentops.jsonl via TurnLogger.
+
+    `turn` carries the shared-budget state for API traffic: each real Gemini request is charged to the
+    budget before it is sent (guards/budget_plugin.py). Without it (eval scripts) nothing is metered.
     """
     session_id = session_id or str(uuid.uuid4())
 
@@ -76,23 +82,28 @@ async def run_query(
     logger = TurnLogger(session_id=session_id, user_message=message)
     collected: list[tuple[str, str]] = []
 
-    async for event in runner.run_async(
-        user_id=user_id,
-        session_id=session_id,
-        new_message=user_message,
-        run_config=RunConfig(max_llm_calls=MAX_LLM_CALLS_PER_TURN),
-    ):
-        logger.observe(event)  # read-only — never touches session state
+    token = current_turn.set(turn)
+    try:
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=user_message,
+            run_config=RunConfig(max_llm_calls=MAX_LLM_CALLS_PER_TURN),
+        ):
+            logger.observe(event)  # read-only — never touches session state
 
-        if event.is_final_response():
-            author = getattr(event, "author", "unknown")
-            if event.content and event.content.parts:
-                text = "".join(
-                    p.text for p in event.content.parts
-                    if hasattr(p, "text") and p.text
-                )
-                if text.strip():
-                    collected.append((text.strip(), author))
+            if event.is_final_response():
+                author = getattr(event, "author", "unknown")
+                if event.content and event.content.parts:
+                    text = "".join(
+                        p.text for p in event.content.parts
+                        if hasattr(p, "text") and p.text
+                    )
+                    if text.strip():
+                        collected.append((text.strip(), author))
+
+    finally:
+        current_turn.reset(token)
 
     logger.flush()
 

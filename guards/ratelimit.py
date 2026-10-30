@@ -19,15 +19,14 @@ import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable, Protocol
 
 from guards import is_local_dev
-from guards.quota import (
-    DAILY_QUOTA_MESSAGE,
-    global_daily_turn_limit,
-    quota_day_window,
-)
+from guards.quota import daily_request_budget
+
+if TYPE_CHECKING:
+    from guards.budget import RequestBudget
 
 logger = logging.getLogger("shred_tech.guard")
 
@@ -213,9 +212,18 @@ class Guard:
 
     store: Store | None
     ip_per_minute: int = IP_PER_MINUTE
-    global_per_day: int = field(default_factory=global_daily_turn_limit)
     session_max_messages: int = SESSION_MAX_MESSAGES
     clock: Callable[[], float] = time.time
+    # The shared daily budget of Gemini requests. Default cap: GEMINI_DAILY_QUOTA x GEMINI_QUOTA_SAFETY.
+    budget_cap: int | None = None
+    budget: "RequestBudget | None" = None
+
+    def __post_init__(self) -> None:
+        if self.store is not None and self.budget is None:
+            from guards.budget import RequestBudget  # local import: budget.py imports this module
+
+            cap = self.budget_cap if self.budget_cap is not None else daily_request_budget()
+            self.budget = RequestBudget(self.store, cap, self.clock)
 
     async def _store_call(self, coro):
         return await store_call(coro)
@@ -226,12 +234,6 @@ class Guard:
         bucket = now // window
         count = await self._store_call(self.store.incr_window(f"rl:{name}:{bucket}", window * 2))
         return count, (bucket + 1) * window - now
-
-    async def _hit_day(self, name: str) -> tuple[int, int]:
-        """Like _hit, but the window is the quota day (midnight to midnight Pacific time)."""
-        day, seconds_left = quota_day_window(self.clock())
-        count = await self._store_call(self.store.incr_window(f"rl:{name}:{day}", 2 * DAY))
-        return count, seconds_left
 
     async def check_request(self, ip: str, session_id: str | None) -> str:
         """Enforce all limits for one chat request and return the session id to use.
@@ -246,10 +248,6 @@ class Guard:
             raise LimitExceeded(
                 "You're sending messages too quickly. Please wait a minute and try again.", wait
             )
-
-        count, wait = await self._hit_day("global:day")
-        if count > self.global_per_day:
-            raise LimitExceeded(DAILY_QUOTA_MESSAGE, wait, status_code=503)
 
         session_id = await self._resolve_session(session_id)
 

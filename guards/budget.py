@@ -12,6 +12,8 @@ midnight Pacific time. A new day therefore starts a new key, and the old key exp
 
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
+from dataclasses import dataclass
 
 from guards.quota import quota_date_key, quota_day_window
 from guards.ratelimit import Store, store_call
@@ -60,3 +62,24 @@ class RequestBudget:
         key, seconds_left = self._today()
         if await store_call(self.store.get_count(key)) >= self.cap:
             raise BudgetExhausted(seconds_left)
+
+
+@dataclass
+class TurnState:
+    """What the budget plugin records while one chat turn runs.
+
+    `calls` counts requests the budget admitted. If a call was refused, `exhausted` (budget used up)
+    or `unavailable` (store down, so we fail closed) is set, and the handler turns that into a 503.
+    """
+
+    budget: RequestBudget
+    calls: int = 0
+    exhausted: BudgetExhausted | None = None
+    unavailable: bool = False
+
+
+# The turn being served, visible to the plugin without passing it through ADK. A ContextVar is per
+# asyncio task, so concurrent chat requests never see each other's state. When it is unset (the eval
+# and adversarial scripts, `adk web`) the plugin does not meter, which is why those paths are
+# unmetered; see SECURITY.md.
+current_turn: ContextVar[TurnState | None] = ContextVar("current_turn", default=None)
