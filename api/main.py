@@ -11,6 +11,7 @@ from pydantic import BaseModel, field_validator
 load_dotenv()
 
 from agent.runner_utils import runner, session_service, APP_NAME, INITIAL_STATE, run_query
+from guards.abuse import INJECTION_REPLY, filter_output, looks_like_injection
 from guards.errors import classify_error, log_exception
 from guards.limits import BodySizeLimitMiddleware
 from guards.ratelimit import (
@@ -109,6 +110,10 @@ async def chat(request: ChatRequest, http_request: Request):
 
     clean_message = sanitize_input(request.message)
 
+    # Obvious prompt-injection / prompt-extraction attempts are answered without a model call.
+    if looks_like_injection(clean_message):
+        return ChatResponse(response=INJECTION_REPLY, session_id=session_id)
+
     try:
         async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
             response_text, _ = await run_query(
@@ -125,7 +130,7 @@ async def chat(request: ChatRequest, http_request: Request):
     if not response_text:
         response_text = "I didn't get a response. Please try again."
 
-    return ChatResponse(response=response_text, session_id=session_id)
+    return ChatResponse(response=filter_output(response_text), session_id=session_id)
 
 
 # Vercel serverless handler
