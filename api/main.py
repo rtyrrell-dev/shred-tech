@@ -12,6 +12,7 @@ load_dotenv()
 
 from agent.runner_utils import runner, session_service, APP_NAME, INITIAL_STATE, run_query
 from guards.abuse import INJECTION_REPLY, filter_output, looks_like_injection
+from guards.cors import allowed_origins
 from guards.errors import classify_error, log_exception
 from guards.limits import BodySizeLimitMiddleware
 from guards.ratelimit import (
@@ -53,12 +54,14 @@ app = FastAPI(
 
 app.add_middleware(BodySizeLimitMiddleware)
 
+# Only our own frontend may call this from a browser. No cookies are used, so credentials stay off.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=600,
 )
 
 
