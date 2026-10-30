@@ -6,7 +6,7 @@ from google.genai import errors as genai_errors
 
 import api.main as main
 from guards.errors import RATE_LIMIT_MESSAGE, classify_error
-from guards.quota import DAILY_QUOTA_MESSAGE, IP_DAILY_MESSAGE, quota_day_window
+from guards.quota import DAILY_QUOTA_MESSAGE, quota_day_window
 from guards.ratelimit import Guard, MemoryStore
 
 DAY_QUOTA_ID = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
@@ -73,18 +73,8 @@ def test_hitting_our_global_cap_returns_the_daily_503(client, monkeypatch):
     assert 1 <= int(res.headers["retry-after"]) <= 25 * 3600
 
 
-def test_hitting_the_per_ip_daily_limit_explains_the_free_tier_and_reset(client, monkeypatch):
-    guard = Guard(store=MemoryStore(), global_per_day=30, ip_per_day=1, ip_per_minute=100)
-    monkeypatch.setattr(main, "guard", guard)
-    client.post("/api/agent", json={"message": "hi"})
-    res = client.post("/api/agent", json={"message": "hi"})
-    assert res.status_code == 429
-    assert res.json()["detail"] == IP_DAILY_MESSAGE
-    assert "midnight Pacific time" in IP_DAILY_MESSAGE
-
-
 def test_retry_after_reflects_the_real_time_to_reset(client, monkeypatch):
-    guard = Guard(store=MemoryStore(), global_per_day=30, ip_per_day=1, ip_per_minute=100)
+    guard = Guard(store=MemoryStore(), global_per_day=1, ip_per_minute=100)
     monkeypatch.setattr(main, "guard", guard)
     client.post("/api/agent", json={"message": "hi"})
     res = client.post("/api/agent", json={"message": "hi"})

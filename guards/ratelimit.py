@@ -25,9 +25,7 @@ from typing import Callable, Protocol
 from guards import is_local_dev
 from guards.quota import (
     DAILY_QUOTA_MESSAGE,
-    IP_DAILY_MESSAGE,
     global_daily_turn_limit,
-    ip_daily_turn_limit,
     quota_day_window,
 )
 
@@ -162,14 +160,9 @@ class Guard:
 
     store: Store | None
     ip_per_minute: int = IP_PER_MINUTE
-    ip_per_day: int | None = None  # default: a third of the global limit (guards/quota.py)
     global_per_day: int = field(default_factory=global_daily_turn_limit)
     session_max_messages: int = SESSION_MAX_MESSAGES
     clock: Callable[[], float] = time.time
-
-    def __post_init__(self) -> None:
-        if self.ip_per_day is None:
-            self.ip_per_day = ip_daily_turn_limit(self.global_per_day)
 
     async def _store_call(self, coro):
         try:
@@ -205,10 +198,6 @@ class Guard:
             raise LimitExceeded(
                 "You're sending messages too quickly. Please wait a minute and try again.", wait
             )
-
-        count, wait = await self._hit_day(f"ip:{ip}:day")
-        if count > self.ip_per_day:
-            raise LimitExceeded(IP_DAILY_MESSAGE, wait)
 
         count, wait = await self._hit_day("global:day")
         if count > self.global_per_day:

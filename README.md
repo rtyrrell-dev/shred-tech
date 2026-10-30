@@ -221,7 +221,7 @@ limits and accepted risks: **[SECURITY.md](SECURITY.md)**.
 
 Summary of what protects the deployment:
 
-- **Cost and abuse limits** — per-IP, per-session and global daily request caps in Upstash Redis
+- **Cost and abuse limits** — a per-IP burst limit, a per-session cap and one shared global daily cap in Upstash Redis
   (fail-closed), body-size cap, 25 s model timeout, output-token and model-call ceilings.
 - **Scope and prompt-injection controls** — shared scope/non-disclosure instruction, regex
   pre-check that skips the model for obvious attacks, system-prompt leak filter, read-only tools.
@@ -246,14 +246,13 @@ The demo runs on a free Gemini key, so the limit that matters is the **daily req
 money. By default the app assumes 20 requests per day (`GEMINI_DAILY_QUOTA`; set it to what AI Studio
 shows for your project). One chat turn can make up to 4 model requests (measured in
 `tests/test_llm_call_budget.py`, and enforced as a hard cap), so the app serves at most
-`floor(quota x 0.8 / 4)` turns per day across all visitors: **4 turns a day with the default**. One
-visitor (IP address) gets about a third of that, which is **1 turn a day** by default. The remaining
+`floor(quota x 0.8 / 4)` turns per day across all visitors: **4 turns a day with the default**. The remaining
 20% leaves room for anything else using the same project quota, such as running the eval harness.
 
 When the budget is used up, the API answers with a friendly 503 explaining that the demo hit its daily
 free-tier quota. Google documents that daily request quotas reset at midnight Pacific time, and the
 app's daily counters reset at the same moment. A bigger quota means more turns: for example 100
-requests per day gives 20 turns a day and 6 per visitor.
+requests per day gives 20 turns a day.
 
 **Local development:** the API is production-strict by default. Add `SHRED_LOCAL_DEV=1` to your local `.env` (it is in `.env.example`) to use an in-memory limiter, allow the Vite dev server's origin and ignore proxy IP headers. **Never set `SHRED_LOCAL_DEV` in Vercel.**
 
