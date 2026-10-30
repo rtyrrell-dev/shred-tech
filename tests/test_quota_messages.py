@@ -30,8 +30,9 @@ def gemini_429(quota_id=None):
     return genai_errors.ClientError(429, {"error": error})
 
 
-def test_daily_message_explains_the_free_tier_quota_and_the_documented_reset():
-    assert "daily free-tier quota" in DAILY_QUOTA_MESSAGE
+def test_daily_message_says_the_shared_free_tier_budget_is_used_up_and_when_it_resets():
+    assert "shared free-tier demo budget" in DAILY_QUOTA_MESSAGE
+    assert "used up for today" in DAILY_QUOTA_MESSAGE
     assert "midnight Pacific time" in DAILY_QUOTA_MESSAGE  # Gemini rate-limits docs state this reset
 
 

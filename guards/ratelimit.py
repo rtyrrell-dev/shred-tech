@@ -32,7 +32,7 @@ logger = logging.getLogger("shred_tech.guard")
 
 # --- Limits (tune for your Gemini quota; the global cap is the real budget guard) ---------------
 IP_PER_MINUTE = 10
-# The global daily limit is derived from the Gemini free-tier quota (see guards/quota.py).
+# The shared daily budget (Gemini requests per day) lives in guards/budget.py.
 SESSION_MAX_MESSAGES = 30
 SESSION_TTL_SECONDS = 24 * 60 * 60
 STORE_TIMEOUT_SECONDS = 2.0
