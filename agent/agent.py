@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from google.adk.agents import LlmAgent
+from google.genai import types as genai_types
 from agent.specialists.setup_agent import setup_agent
 from agent.specialists.troubleshooting_agent import troubleshooting_agent
 from agent.specialists.gear_agent import gear_agent
@@ -63,3 +64,20 @@ root_agent = LlmAgent(
     instruction=COORDINATOR_INSTRUCTION,
     sub_agents=[setup_agent, troubleshooting_agent, gear_agent],
 )
+
+# Cost ceiling per model call. Gemini 2.5's internal "thinking" tokens count against this cap, and
+# a cap that is too low yields truncated or empty answers, so it is generous: normal replies are a
+# few hundred tokens. It exists to stop runaway or coaxed-out long generations, not to shape replies.
+MAX_OUTPUT_TOKENS = 4096
+
+
+def apply_cost_limits(agent: LlmAgent, max_output_tokens: int = MAX_OUTPUT_TOKENS) -> None:
+    """Set the output-token ceiling on an agent and everything beneath it."""
+    agent.generate_content_config = genai_types.GenerateContentConfig(
+        max_output_tokens=max_output_tokens
+    )
+    for sub_agent in agent.sub_agents:
+        apply_cost_limits(sub_agent, max_output_tokens)
+
+
+apply_cost_limits(root_agent)
