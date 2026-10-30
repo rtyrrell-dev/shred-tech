@@ -33,7 +33,6 @@ def test_client_cannot_choose_the_model(monkeypatch):
         return "ok", "SetupAgent"
 
     monkeypatch.setattr(main, "run_query", fake_run_query)
-    main._rate_limit_store.clear()
     client = TestClient(main.app)
     res = client.post(
         "/api/agent", json={"message": "hi", "model": "gemini-2.5-pro", "max_output_tokens": 99999}
