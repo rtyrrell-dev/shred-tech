@@ -59,7 +59,7 @@ export default function App() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = "";
     }
     setIsLoading(true);
 
@@ -135,7 +135,7 @@ export default function App() {
     setSessionId(null);
     setInput("");
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = "";
     }
   };
 
@@ -210,6 +210,7 @@ export default function App() {
                 autoResize();
               }}
               onKeyDown={handleKeyDown}
+              rows={1}
               placeholder="Describe your guitar issue or ask a setup question..."
               disabled={isLoading}
             />
