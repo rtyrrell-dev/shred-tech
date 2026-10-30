@@ -19,5 +19,5 @@ def fresh_guard(monkeypatch):
     from guards.ratelimit import Guard, MemoryStore
 
     # Generous limits so unrelated tests are never throttled; limit tests build their own Guard.
-    guard = Guard(store=MemoryStore(), ip_per_minute=10_000, ip_per_day=10_000, global_per_day=10_000)
+    guard = Guard(store=MemoryStore(), ip_per_minute=10_000, global_per_day=10_000)
     monkeypatch.setattr(main, "guard", guard)

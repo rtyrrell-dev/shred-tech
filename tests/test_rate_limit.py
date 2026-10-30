@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 import api.main as main
 from guards import ratelimit
-from guards.quota import IP_DAILY_MESSAGE
 from guards.ratelimit import (
     Guard,
     GuardUnavailable,
@@ -27,7 +26,6 @@ def make_guard(**overrides):
     clock = overrides.pop("clock", Clock())
     # Daily limits default to the tiny free-tier values; these tests exercise other limits, so give
     # the daily ones headroom unless a test sets them explicitly.
-    overrides.setdefault("ip_per_day", 1000)
     overrides.setdefault("global_per_day", 1000)
     return Guard(store=MemoryStore(clock), clock=clock, **overrides), clock
 
@@ -60,16 +58,6 @@ async def test_omitting_session_id_does_not_dodge_ip_limit():
     await guard.check_request("1.1.1.1", "made-up-id")
     with pytest.raises(LimitExceeded):
         await guard.check_request("1.1.1.1", None)
-
-
-async def test_ip_daily_limit():
-    guard, clock = make_guard(ip_per_minute=100, ip_per_day=3)
-    for _ in range(3):
-        await guard.check_request("1.1.1.1", None)
-        clock.now += 61  # step past the per-minute window but stay in the same day
-    with pytest.raises(LimitExceeded) as exc:
-        await guard.check_request("1.1.1.1", None)
-    assert exc.value.message == IP_DAILY_MESSAGE
 
 
 # --- global budget circuit breaker ---------------------------------------
