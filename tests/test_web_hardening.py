@@ -99,3 +99,11 @@ def test_frontend_never_renders_html_from_model_output():
     banned = re.compile(r"dangerouslySetInnerHTML|\.innerHTML|insertAdjacentHTML|document\.write")
     for source in (ROOT / "frontend" / "src").rglob("*.ts*"):
         assert not banned.search(source.read_text(encoding="utf-8")), f"{source.name} injects raw HTML"
+
+
+def test_frontend_only_reads_the_public_api_url_variable():
+    # Anything prefixed VITE_ is bundled into the public JavaScript; it must never hold a secret.
+    names = set()
+    for source in (ROOT / "frontend" / "src").rglob("*.ts*"):
+        names |= set(re.findall(r"import\.meta\.env\.(\w+)", source.read_text(encoding="utf-8")))
+    assert names <= {"VITE_API_URL"}
