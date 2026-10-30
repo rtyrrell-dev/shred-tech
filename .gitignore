@@ -35,3 +35,6 @@ Thumbs.db
 
 # AgentOps logs (written locally, not committed)
 logs/
+
+# Security policy (local only)
+SECURITY.md
