@@ -9,10 +9,13 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # Runs in a fresh interpreter so the app is imported exactly as a cold serverless instance would,
-# with the model call replaced so no key or network is needed.
+# with the model call replaced so no key or network is needed. load_dotenv is stubbed so a
+# developer's .env cannot change the result (a cold serverless instance has no .env either).
 SCRIPT = """
 import json, sys
 sys.path.insert(0, {root!r})
+import dotenv
+dotenv.load_dotenv = lambda *a, **k: False
 from fastapi.testclient import TestClient
 import api.main as main
 
@@ -41,6 +44,7 @@ STORE_VARIABLES = (
     "REDIS_URL",
     "SHRED_LOCAL_DEV",
     "VERCEL",
+    "LOG_USER_TEXT",
 )
 
 
