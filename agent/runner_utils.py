@@ -3,12 +3,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from google.adk.agents.run_config import RunConfig
+from google.adk.plugins.global_instruction_plugin import GlobalInstructionPlugin
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types as genai_types
 
 from agent.agent import root_agent
 from agent.logging_utils import TurnLogger
+from guards.abuse import GUARD_INSTRUCTION
 
 APP_NAME = "shred_tech"
 
@@ -23,7 +25,14 @@ INITIAL_STATE = {
 MAX_LLM_CALLS_PER_TURN = 10
 
 session_service = InMemorySessionService()
-runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
+# Scope/non-disclosure rules appended to every agent's prompt (the supported replacement for the
+# deprecated LlmAgent.global_instruction field).
+runner = Runner(
+    agent=root_agent,
+    app_name=APP_NAME,
+    session_service=session_service,
+    plugins=[GlobalInstructionPlugin(GUARD_INSTRUCTION)],
+)
 
 
 async def run_query(
