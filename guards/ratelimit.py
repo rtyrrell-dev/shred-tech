@@ -19,17 +19,18 @@ import logging
 import os
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
 from guards import is_local_dev
+from guards.quota import global_daily_turn_limit
 
 logger = logging.getLogger("shred_tech.guard")
 
 # --- Limits (tune for your Gemini quota; the global cap is the real budget guard) ---------------
 IP_PER_MINUTE = 10
 IP_PER_DAY = 100
-GLOBAL_PER_DAY = int(os.environ.get("GLOBAL_DAILY_LIMIT", "300"))
+# The global daily limit is derived from the Gemini free-tier quota (see guards/quota.py).
 SESSION_MAX_MESSAGES = 30
 SESSION_TTL_SECONDS = 24 * 60 * 60
 STORE_TIMEOUT_SECONDS = 2.0
@@ -157,7 +158,7 @@ class Guard:
     store: Store | None
     ip_per_minute: int = IP_PER_MINUTE
     ip_per_day: int = IP_PER_DAY
-    global_per_day: int = GLOBAL_PER_DAY
+    global_per_day: int = field(default_factory=global_daily_turn_limit)
     session_max_messages: int = SESSION_MAX_MESSAGES
     clock: Callable[[], float] = time.time
 
