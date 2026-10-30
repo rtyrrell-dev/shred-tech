@@ -35,6 +35,7 @@ DAILY_QUOTA_MESSAGE = (
 import logging
 import os
 from datetime import datetime, timedelta
+from fractions import Fraction
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger("shred_tech.quota")
@@ -60,6 +61,11 @@ except ZoneInfoNotFoundError:  # tzdata is a pinned dependency, so this should n
 
     logger.error("no time-zone data for %s; using fixed UTC-8 (off by 1h in summer)", RESET_TIMEZONE_NAME)
     RESET_TIMEZONE = timezone(timedelta(hours=-8))
+
+
+def quota_date_key(now: float) -> str:
+    """The Pacific-time calendar date (YYYY-MM-DD) of the quota day containing `now`."""
+    return datetime.fromtimestamp(now, RESET_TIMEZONE).date().isoformat()
 
 
 def quota_day_window(now: float) -> tuple[int, int]:
@@ -106,3 +112,35 @@ def global_daily_turn_limit() -> int:
     if override is not None:
         return override
     return max(1, daily_quota() * SAFETY_PERCENT // (100 * MAX_CALLS_PER_TURN))
+
+
+# --- Daily quota -> request budget ------------------------------------------------------------
+
+# Fraction of the daily quota the demo may spend. The demo runs on its own Google project, so most of
+# the quota is ours to use; the remainder is slack for anything unmetered (see SECURITY.md) and for
+# the moment where our counter and Google's disagree.
+DEFAULT_QUOTA_SAFETY = Fraction(9, 10)
+
+
+def quota_safety() -> Fraction:
+    """GEMINI_QUOTA_SAFETY as an exact fraction in (0, 1]; the default 0.9 if unset or invalid."""
+    raw = os.environ.get("GEMINI_QUOTA_SAFETY")
+    if raw is None or not raw.strip():
+        return DEFAULT_QUOTA_SAFETY
+    try:
+        value = Fraction(raw.strip())
+    except (ValueError, ZeroDivisionError):
+        value = Fraction(0)
+    if not 0 < value <= 1:
+        logger.warning("ignoring GEMINI_QUOTA_SAFETY=%r: expected a number above 0 and at most 1", raw)
+        return DEFAULT_QUOTA_SAFETY
+    return value
+
+
+def daily_request_budget() -> int:
+    """Gemini requests the demo may make per day, shared by all visitors: floor(quota x safety).
+
+    Computed with exact fractions (floats would turn 100 x 0.57 into 56.99999999999999 and floor it
+    to 56). At least 1, so a tiny quota does not switch the demo off entirely.
+    """
+    return max(1, int(daily_quota() * quota_safety()))  # int() floors a positive Fraction

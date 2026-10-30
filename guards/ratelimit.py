@@ -61,8 +61,20 @@ UNAVAILABLE_MESSAGE = "SHRED TECH is temporarily unavailable. Please try again s
 
 class Store(Protocol):
     async def incr_window(self, key: str, ttl: int) -> int: ...
+    async def incr_if_below(self, key: str, limit: int, ttl: int) -> int | None: ...
+    async def get_count(self, key: str) -> int: ...
     async def exists(self, key: str) -> bool: ...
     async def set_with_ttl(self, key: str, ttl: int) -> None: ...
+
+
+async def store_call(coro):
+    """Await a store operation with a timeout; any failure becomes GuardUnavailable (fail closed)."""
+    try:
+        async with asyncio.timeout(STORE_TIMEOUT_SECONDS):
+            return await coro
+    except Exception as exc:
+        logger.error("limiter store error: %s", type(exc).__name__)
+        raise GuardUnavailable from exc
 
 
 class MemoryStore:
@@ -85,11 +97,44 @@ class MemoryStore:
         self._data[key] = (count, entry[1] if entry else self._clock() + ttl)
         return count
 
+    async def incr_if_below(self, key: str, limit: int, ttl: int) -> int | None:
+        """Add one only if the count is below `limit`; None (and no change) otherwise.
+
+        There is no await inside, so on the event loop this is atomic, like the Lua script that does
+        the same job in Redis.
+        """
+        entry = self._live(key)
+        count = entry[0] if entry else 0
+        if count >= limit:
+            return None
+        self._data[key] = (count + 1, entry[1] if entry else self._clock() + ttl)
+        return count + 1
+
+    async def get_count(self, key: str) -> int:
+        entry = self._live(key)
+        return entry[0] if entry else 0
+
     async def exists(self, key: str) -> bool:
         return self._live(key) is not None
 
     async def set_with_ttl(self, key: str, ttl: int) -> None:
         self._data[key] = (1, self._clock() + ttl)
+
+
+# Runs inside Redis as one atomic step: no other command can run between the check and the increment,
+# so a rejected call never inflates the counter. Returns the new count, or -1 when at the limit.
+# KEYS[1] = counter key, ARGV[1] = limit, ARGV[2] = TTL in seconds (set when the key is created).
+INCR_IF_BELOW_LUA = """
+local current = tonumber(redis.call('GET', KEYS[1]) or '0')
+if current >= tonumber(ARGV[1]) then
+  return -1
+end
+local n = redis.call('INCR', KEYS[1])
+if n == 1 then
+  redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+end
+return n
+"""
 
 
 class UpstashStore:
@@ -103,6 +148,14 @@ class UpstashStore:
         if count == 1:
             await self._redis.expire(key, ttl)
         return int(count)
+
+    async def incr_if_below(self, key: str, limit: int, ttl: int) -> int | None:
+        result = int(await self._redis.eval(INCR_IF_BELOW_LUA, keys=[key], args=[str(limit), str(ttl)]))
+        return None if result < 0 else result
+
+    async def get_count(self, key: str) -> int:
+        value = await self._redis.get(key)
+        return int(value) if value is not None else 0
 
     async def exists(self, key: str) -> bool:
         return bool(await self._redis.exists(key))
@@ -165,12 +218,7 @@ class Guard:
     clock: Callable[[], float] = time.time
 
     async def _store_call(self, coro):
-        try:
-            async with asyncio.timeout(STORE_TIMEOUT_SECONDS):
-                return await coro
-        except Exception as exc:  # any store failure => fail closed
-            logger.error("limiter store error: %s", type(exc).__name__)
-            raise GuardUnavailable from exc
+        return await store_call(coro)
 
     async def _hit(self, name: str, window: int) -> tuple[int, int]:
         """Count one hit in the current window. Returns (count, seconds until window ends)."""
