@@ -1,0 +1,18 @@
+# Opens PRs for vulnerable/outdated dependencies. Each PR runs CI, so a bump that breaks
+# something (e.g. a version google-adk does not allow) is visible before merging.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
