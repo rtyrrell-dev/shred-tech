@@ -5,7 +5,8 @@ The fake raises if the framework makes a call the script did not expect, so any 
 (for example the coordinator being called again after a hand-off) shows up as a failure rather
 than being silently undercounted.
 
-These measured numbers feed the free-tier quota math in guards/quota.py.
+The 4-call maximum is the per-turn cap (guards/quota.py); the shared daily budget itself is
+metered per request, not per turn (guards/budget.py).
 """
 
 import uuid

@@ -22,11 +22,12 @@ Retries add none: with no retry options configured, google-genai uses a "never r
 # instead of an estimate. A turn that needs more than this fails with a generic error.
 MAX_CALLS_PER_TURN = 4
 
-# Shown when the daily free-tier quota is used up. The reset time is stated because Google's docs say
-# daily request quotas reset at midnight Pacific time.
+# Shown when the shared daily budget is used up (our own counter, or a Gemini error that names a
+# per-day quota). The reset time is stated because Google's docs say daily request quotas reset at
+# midnight Pacific time, and our counters reset at the same moment.
 DAILY_QUOTA_MESSAGE = (
-    "SHRED TECH has used up its daily free-tier quota for the Gemini API. "
-    "It will be back after the quota resets at midnight Pacific time."
+    "SHRED TECH's shared free-tier demo budget is used up for today. "
+    "It will be back after the daily reset at midnight Pacific time."
 )
 
 
