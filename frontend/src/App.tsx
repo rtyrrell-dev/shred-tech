@@ -73,12 +73,15 @@ export default function App() {
         }),
       });
 
-      if (res.status === 429) {
-        const data = await res.json();
-        setMessages((prev) => [
-          ...prev,
-          { role: "agent", content: `Rate limit reached — ${data.detail}` },
-        ]);
+      // 413 too large, 429 rate limit / session cap, 503 quota or capacity, 504 timeout:
+      // the server sends a friendly, safe message in `detail`. It is rendered as plain text.
+      if ([413, 429, 503, 504].includes(res.status)) {
+        const data = await res.json().catch(() => null);
+        const detail =
+          typeof data?.detail === "string"
+            ? data.detail
+            : "SHRED TECH is busy right now. Please try again in a little while.";
+        setMessages((prev) => [...prev, { role: "agent", content: detail }]);
         return;
       }
 
@@ -93,7 +96,11 @@ export default function App() {
       }
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        setMessages((prev) => [
+          ...prev,
+          { role: "agent", content: "Something went wrong on our end. Please try again." },
+        ]);
+        return;
       }
 
       const data = await res.json();
@@ -181,6 +188,7 @@ export default function App() {
                 <span className="message-label">
                   {msg.role === "user" ? "YOU" : "SHRED TECH"}
                 </span>
+                {/* Model output is rendered as a text node, never as HTML (no markdown/innerHTML). */}
                 <div className="message-bubble">{msg.content}</div>
               </div>
             ))}
